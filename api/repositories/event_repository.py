@@ -20,3 +20,59 @@ class EventRepository:
         if not response.data:
             raise ValueError("Evento no encontrado o no se pudo actualizar")
         return response.data[0]
+    
+    def get_active_events(self, baby_id: str, category: str = None) -> list:
+        duration_categories = ['nap', 'night_waking', 'feed', 'pumping']
+        
+        query = self.db.table('baby_events') \
+            .select('*') \
+            .eq('baby_id', baby_id) \
+            .is_('end_time', 'null') \
+            .in_('category', duration_categories)
+            
+        if category:
+            query = query.eq('category', category)
+            
+        response = query.execute()
+        raw_active_events = response.data
+        
+        valid_active_events = []
+        for event in raw_active_events:
+            if event['category'] == 'feed':
+                metadata_type = event.get('metadata', {}).get('type')
+                if metadata_type != 'breast':
+                    continue
+                    
+            valid_active_events.append(event)
+            
+        return valid_active_events
+    
+    def delete_event(self, event_id: str) -> list:
+        response = self.db.table('baby_events').delete().eq('id', event_id).execute()
+        return response.data
+    
+    def get_all_start_times(self, baby_id: str) -> list[dict]:
+        all_data = []
+        offset = 0
+        limit = 1000
+        
+        while True:
+            # Pedimos los datos en bloques (0 a 999, 1000 a 1999, etc.)
+            response = (
+                self.db.table("baby_events")
+                .select("start_time")
+                .eq("baby_id", baby_id)
+                .range(offset, offset + limit - 1)
+                .execute()
+            )
+            
+            if response.data:
+                all_data.extend(response.data)
+                
+            # Si nos devuelven menos filas del límite (o ninguna), hemos terminado
+            if not response.data or len(response.data) < limit:
+                break
+                
+            offset += limit
+            
+        return all_data

@@ -3,18 +3,18 @@ from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 class EventCategory(str, Enum):
-    WOKE_UP = "Woke up"
-    NAP = "Nap"
-    BED_TIME = "Bed time"
-    NIGHT_WAKING = "Night waking"
-    FEED = "Feed"
-    DIAPER = "Diaper"
-    MEDICINE = "Medicine"
-    BATH = "Bath"
-    TEMPERATURE = "Temperature"
-    GROWTH = "Growth"
-    PUMPING = "Pumping"
-    MILESTONE = "Milestone"
+    WOKE_UP = "woke_up"
+    NAP = "nap"
+    BED_TIME = "bed_time"
+    NIGHT_WAKING = "night_waking"
+    FEED = "feed"
+    DIAPER = "diaper"
+    MEDICINE = "medicine"
+    BATH = "bath"
+    TEMPERATURE = "temperature"
+    GROWTH = "growth"
+    PUMPING = "pumping"
+    MILESTONE = "milestone"
 
 class EventBase(BaseModel):
     baby_id: str

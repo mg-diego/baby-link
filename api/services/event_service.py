@@ -6,12 +6,15 @@ class EventService:
     def __init__(self, repository: EventRepository):
         self.repository = repository
         
-        # Mapa de validación de metadatos
+        # Mapa de validación de metadatos (¡Actualizado con los que faltaban!)
         self._metadata_validators = {
             EventCategory.FEED: self._validate_feed_metadata,
             EventCategory.DIAPER: self._validate_diaper_metadata,
             EventCategory.MEDICINE: self._validate_medicine_metadata,
             EventCategory.TEMPERATURE: self._validate_temperature_metadata,
+            EventCategory.GROWTH: self._validate_growth_metadata,
+            EventCategory.PUMPING: self._validate_pumping_metadata,
+            EventCategory.MILESTONE: self._validate_milestone_metadata,
         }
 
     def register_event(self, event: EventBase) -> dict:
@@ -39,13 +42,17 @@ class EventService:
                 detail="El payload de actualización está vacío."
             )
             
-        # Si el cliente envía metadatos nuevos, podríamos validarlos aquí si es necesario
-        # (Para una versión V1, asumimos que el payload extra de cerrado es correcto)
-        
         try:
             return self.repository.update(event_id, update_dict)
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e))
+        
+    def get_valid_event_dates(self, baby_id: str) -> list[str]:
+        if data := self.repository.get_all_start_times(baby_id):
+            unique_dates = {item["start_time"][:10] for item in data if item.get("start_time")}
+            return sorted(list(unique_dates))
+
+        return []
 
     # --- Validadores de Estructura ---
 
@@ -73,7 +80,6 @@ class EventService:
     # --- Validadores de Metadatos (Payloads) ---
 
     def _validate_growth_metadata(self, metadata: dict):
-        # Exigimos al menos un dato métrico para que el registro tenga sentido
         if not any(k in metadata for k in ('weight_kg', 'height_cm', 'head_cm')):
             raise HTTPException(
                 status_code=400, 
@@ -81,12 +87,10 @@ class EventService:
             )
 
     def _validate_pumping_metadata(self, metadata: dict):
-        # Como es Start-Stop, al inicio puede estar vacío. 
-        # Si envían datos (al hacer el PATCH de cierre), verificamos que envíen el total.
-        if metadata and 'total_ml' not in metadata:
+        if metadata and 'total_ml' not in metadata and 'notes' not in metadata:
             raise HTTPException(
                 status_code=400, 
-                detail="Si se incluyen metadatos en Pumping, debe contener 'total_ml'"
+                detail="Si se incluyen metadatos en Pumping, debe contener 'total_ml' o 'notes'"
             )
 
     def _validate_milestone_metadata(self, metadata: dict):
@@ -107,8 +111,13 @@ class EventService:
             raise HTTPException(status_code=400, detail=f"Diaper debe tener condition: {valid_conditions}")
 
     def _validate_medicine_metadata(self, metadata: dict):
-        if not all(k in metadata for k in ('name', 'dose_amount', 'dose_unit')):
-            raise HTTPException(status_code=400, detail="Medicine requiere: name, dose_amount y dose_unit")
+        # Aceptamos que venga solo con 'notes' (por el formulario temporal de Flutter)
+        # O que venga con los datos completos estrictos.
+        has_strict_fields = all(k in metadata for k in ('name', 'dose_amount', 'dose_unit'))
+        has_notes = 'notes' in metadata
+        
+        if not (has_strict_fields or has_notes):
+            raise HTTPException(status_code=400, detail="Medicine requiere: name, dose_amount y dose_unit (o al menos 'notes')")
 
     def _validate_temperature_metadata(self, metadata: dict):
         if 'celsius' not in metadata:

@@ -7,8 +7,11 @@ class AnalyticsService:
     def __init__(self, repository: AnalyticsRepository):
         self.repository = repository
 
+    def get_events_by_date_range(self, baby_id: str, start_date: date, end_date: date) -> list:
+        return self.repository.get_events_by_date_range(baby_id, start_date, end_date)
+
     def get_daily_summary(self, baby_id: str, target_date: date) -> DailySummary:
-        events = self.repository.get_daily_events(baby_id, target_date)
+        events = self.repository.get_events_by_date_range(baby_id, target_date, target_date)
         
         total_nap = 0
         total_feeds = 0

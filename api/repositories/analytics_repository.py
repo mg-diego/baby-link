@@ -1,14 +1,26 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import List
 from supabase import Client
+import pytz
 
 class AnalyticsRepository:
     def __init__(self, db_client: Client):
         self.db = db_client
 
-    def get_daily_events(self, baby_id: str, target_date: date) -> List[dict]:
-        start_iso = f"{target_date}T00:00:00Z"
-        end_iso = f"{target_date + timedelta(days=1)}T00:00:00Z"
+    def get_events_by_date_range(self, baby_id: str, start_date: date, end_date: date, timezone: str = "Europe/Madrid") -> List[dict]:
+        try:
+            user_tz = pytz.timezone(timezone)
+        except pytz.UnknownTimeZoneError:
+            user_tz = pytz.UTC
+
+        start_naive = datetime.combine(start_date, datetime.min.time())
+        end_naive = datetime.combine(end_date + timedelta(days=1), datetime.min.time())
+
+        start_utc = user_tz.localize(start_naive).astimezone(pytz.UTC)
+        end_utc = user_tz.localize(end_naive).astimezone(pytz.UTC)
+
+        start_iso = start_utc.isoformat()
+        end_iso = end_utc.isoformat()
         
         response = self.db.table("baby_events")\
             .select("*")\

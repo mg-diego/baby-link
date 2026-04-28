@@ -1,3 +1,4 @@
+from typing import List
 from repositories.baby_repository import BabyRepository
 from models.baby_models import BabyCreate
         
@@ -12,3 +13,6 @@ class BabyService:
             "user_id": baby.user_id
         }
         return self.repository.save(data)
+    
+    def get_babies(self, user_id: str) -> List[dict]:
+        return self.repository.get_by_user(user_id)

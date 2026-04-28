@@ -1,0 +1,1171 @@
+import 'dart:math' as math;
+
+import 'package:app/api/api_service.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/events_provider.dart';
+import '../../analytics/providers/daily_summary_provider.dart';
+import '../../../core/models/event_type.dart';
+
+class HomeScreen extends ConsumerStatefulWidget {
+  final String babyId;
+  const HomeScreen({super.key, required this.babyId});
+
+  @override
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen>
+    with WidgetsBindingObserver {
+  
+  int _viewMode = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _invalidateAll();
+    }
+  }
+
+  void _invalidateAll() {
+    final selectedDate = ref.read(selectedDateProvider);
+    ref.invalidate(
+      dailyEventsProvider((babyId: widget.babyId, date: selectedDate)),
+    );
+    ref.invalidate(
+      dailyEventsProvider((
+        babyId: widget.babyId,
+        date: selectedDate.subtract(const Duration(days: 1)),
+      )),
+    );
+    ref.invalidate(
+      dailySummaryProvider((babyId: widget.babyId, date: selectedDate)),
+    );
+  }
+
+  Future<void> _handleDelete(
+    Map<String, dynamic> event,
+    ({String babyId, DateTime date}) args,
+  ) async {
+    try {
+      await ApiService.deleteEvent(event['id'].toString());
+      _invalidateAll();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Evento eliminado'))
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al eliminar: $e'))
+        );
+      }
+    }
+  }
+
+  void _handleTap(Map<String, dynamic> event) {
+    // TODO: navegar a pantalla de edición (con BottomSheet o nueva pantalla)
+  }
+
+  List<_SleepAnchor> _buildAnchors(List<dynamic> allEvents) {
+    List<_SleepAnchor> anchors = [];
+    for (var e in allEvents) {
+      final cat = e['category'];
+      final start = DateTime.parse(e['start_time']).toLocal();
+      final end = e['end_time'] != null
+          ? DateTime.parse(e['end_time']).toLocal()
+          : null;
+
+      if (cat == 'woke_up') {
+        anchors.add(_SleepAnchor(start, true));
+      } else if (cat == 'bed_time') {
+        anchors.add(_SleepAnchor(start, false));
+      } else if (cat == 'nap') {
+        anchors.add(_SleepAnchor(start, false));
+        if (end != null) anchors.add(_SleepAnchor(end, true));
+      } else if (cat == 'night_waking') {
+        anchors.add(_SleepAnchor(start, true));
+        if (end != null) anchors.add(_SleepAnchor(end, false));
+      }
+    }
+    anchors.sort((a, b) => b.time.compareTo(a.time));
+    return anchors;
+  }
+
+  Duration? _calcGap(List<_SleepAnchor> anchors, DateTime time, bool isWake) {
+    for (var a in anchors) {
+      if (a.time.isBefore(time)) {
+        if (a.isWake != isWake) {
+          return time.difference(a.time);
+        }
+      }
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedDate = ref.watch(selectedDateProvider);
+    final args = (babyId: widget.babyId, date: selectedDate);
+    final argsYday = (
+      babyId: widget.babyId,
+      date: selectedDate.subtract(const Duration(days: 1)),
+    );
+
+    final eventsAsync = ref.watch(dailyEventsProvider(args));
+    final eventsYdayAsync = ref.watch(dailyEventsProvider(argsYday));
+    final summaryAsync = ref.watch(dailySummaryProvider(args));
+
+    final today = DateTime(
+      DateTime.now().year,
+      DateTime.now().month,
+      DateTime.now().day,
+    );
+    final isToday = selectedDate == today;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'Mi Bebé',
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20),
+        ),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            tooltip: 'Actualizar',
+            onPressed: _invalidateAll,
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // ── 1. SELECTOR DE FECHAS ───────────────────────────────
+          const _DateSelector(),
+
+          // ── 2. TOGGLE DE VISTA ──────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Container(
+              height: 44,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  _buildTab(0, 'Reloj', Icons.av_timer_rounded),
+                  _buildTab(1, 'Lista', Icons.format_list_bulleted_rounded),                  
+                ],
+              ),
+            ),
+          ),
+
+          // ── 3. DASHBOARD DE RESUMEN (Solo en vista Lista) ───────
+          if (_viewMode == 1)
+            summaryAsync.when(
+              data: (summary) {
+                if (summary == null) return const SizedBox.shrink();
+                return _SummaryDashboard(summary: summary);
+              },
+              loading: () => const SizedBox(
+                  height: 50, child: Center(child: CircularProgressIndicator())),
+              error: (_, __) => const SizedBox.shrink(),
+            ),
+
+          if (_viewMode == 1) const Divider(height: 1),
+
+          // ── 4. ÁREA DE CONTENIDO (Lista o Reloj) ────────────────
+          Expanded(
+            child: eventsAsync.when(
+              data: (events) {
+                if (events.isEmpty) {
+                  return _EmptyState(isToday: isToday);
+                }
+
+                // Modo visual circular
+                if (_viewMode == 0) {
+                  return _VisualClockView(
+                    events: List<Map<String, dynamic>>.from(events), 
+                    selectedDate: selectedDate
+                  );
+                }
+
+                // Modo Lista (con actualización optimista al borrar)
+                return StatefulBuilder(
+                  builder: (context, setListState) {
+                    final sorted = List<Map<String, dynamic>>.from(events)
+                      ..sort((a, b) => b['start_time'].compareTo(a['start_time']));
+
+                    final ydayEvents = eventsYdayAsync.asData?.value ?? [];
+                    final allEventsForAnchors = [...events, ...ydayEvents];
+                    final anchors = _buildAnchors(allEventsForAnchors);
+
+                    List<Widget> listItems = [];
+                    for (var event in sorted) {
+                      final cat = event['category'];
+                      final start = DateTime.parse(event['start_time']).toLocal();
+                      final end = event['end_time'] != null
+                          ? DateTime.parse(event['end_time']).toLocal()
+                          : null;
+
+                      final bool isFirstItem = listItems.isEmpty;
+
+                      // Separadores SUPERIORES
+                      if (cat == 'nap' && end != null) {
+                        final dur = _calcGap(anchors, end, true);
+                        if (dur != null && !isFirstItem) {
+                          listItems.add(_SeparatorItem('Fin del periodo de sueño', dur, Key('sep_top_${event['id']}')));
+                        }
+                      } else if (cat == 'night_waking' && end != null) {
+                        final dur = _calcGap(anchors, end, false);
+                        if (dur != null && !isFirstItem) {
+                          listItems.add(_SeparatorItem('Fin del periodo de vigilia', dur, Key('sep_top_${event['id']}')));
+                        }
+                      }
+
+                      // Card de Evento
+                      listItems.add(
+                        _EventCard(
+                          key: ValueKey(event['id']),
+                          event: event,
+                          onTap: () => _handleTap(event),
+                          onDelete: () {
+                            // Borrado optimista local
+                            setListState(() {
+                              events.removeWhere((e) => e['id'] == event['id']);
+                            });
+                            // Llamada a API
+                            _handleDelete(event, args);
+                          },
+                        ),
+                      );
+
+                      // Separadores INFERIORES
+                      if (cat == 'nap' || cat == 'bed_time') {
+                        final dur = _calcGap(anchors, start, false);
+                        if (dur != null) {
+                          listItems.add(_SeparatorItem('Fin del periodo de vigilia', dur, Key('sep_bot_${event['id']}')));
+                        }
+                      } else if (cat == 'woke_up' || cat == 'night_waking') {
+                        final dur = _calcGap(anchors, start, true);
+                        if (dur != null) {
+                          listItems.add(_SeparatorItem('Fin del periodo de sueño', dur, Key('sep_bot_${event['id']}')));
+                        }
+                      }
+                    }
+
+                    return RefreshIndicator(
+                      onRefresh: () async => _invalidateAll(),
+                      child: ListView.builder(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 20),
+                        itemCount: listItems.length,
+                        itemBuilder: (context, index) => listItems[index],
+                      ),
+                    );
+                  },
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (err, _) => Center(
+                child: Text('Error: $err', style: const TextStyle(color: Colors.red)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTab(int index, String text, IconData icon) {
+    final isSelected = _viewMode == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _viewMode = index),
+        child: Container(
+          decoration: BoxDecoration(
+            color: isSelected ? Theme.of(context).colorScheme.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: isSelected
+                ? [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2))]
+                : [],
+          ),
+          margin: const EdgeInsets.all(4),
+          alignment: Alignment.center,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 16, color: isSelected ? Colors.white : Colors.grey.shade600),
+              const SizedBox(width: 6),
+              Text(
+                text,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected ? Colors.white : Colors.grey.shade700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RELOJ VISUAL
+// ─────────────────────────────────────────────────────────────────────────────
+class _VisualClockView extends StatelessWidget {
+  final List<Map<String, dynamic>> events;
+  final DateTime selectedDate;
+
+  const _VisualClockView({required this.events, required this.selectedDate});
+
+  @override
+  Widget build(BuildContext context) {
+    DateTime? wakeTime;
+    final sortedAsc = List<Map<String, dynamic>>.from(events)
+      ..sort((a, b) => a['start_time'].compareTo(b['start_time']));
+      
+    for (var e in sortedAsc) {
+      if (e['category'] == 'woke_up') {
+        wakeTime = DateTime.parse(e['start_time']).toLocal();
+        break;
+      }
+    }
+    
+    wakeTime ??= DateTime(selectedDate.year, selectedDate.month, selectedDate.day, 7, 0);
+    final sleepTime = DateTime(selectedDate.year, selectedDate.month, selectedDate.day, 20, 30);
+    final totalDuration = sleepTime.difference(wakeTime).inMinutes;
+
+    return Center(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final size = math.min(constraints.maxWidth - 40, 350.0);
+          final radius = size / 2;
+
+          const double startAngle = 2 * math.pi / 3; 
+          const double sweepAngle = 5 * math.pi / 3; 
+
+          return SizedBox(
+            width: size,
+            height: size,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                CustomPaint(
+                  size: Size(size, size),
+                  painter: _ClockPainter(
+                    events: sortedAsc,
+                    wakeTime: wakeTime!,
+                    sleepTime: sleepTime,
+                    totalMinutes: totalDuration,
+                    startAngle: startAngle,
+                    sweepAngle: sweepAngle,
+                  ),
+                ),
+                Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Ritmo del día', style: TextStyle(fontSize: 14, color: Colors.grey)),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${wakeTime.hour.toString().padLeft(2,'0')}:${wakeTime.minute.toString().padLeft(2,'0')} - 20:30',
+                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+                ...sortedAsc.map((event) {
+                  final cat = event['category'];
+                  final meta = event['metadata'] as Map<String, dynamic>? ?? {};
+                  final eventType = EventType.fromBackend(cat, meta);
+
+                  final eventStart = DateTime.parse(event['start_time']).toLocal();
+                  if (eventStart.isBefore(wakeTime!) || eventStart.isAfter(sleepTime)) {
+                    return const SizedBox.shrink();
+                  }
+
+                  final fraction = eventStart.difference(wakeTime).inMinutes / totalDuration;
+                  final angle = startAngle + (fraction * sweepAngle);
+
+                  final x = radius + radius * math.cos(angle);
+                  final y = radius + radius * math.sin(angle);
+                  const double iconRadius = 18;
+
+                  return Positioned(
+                    left: x - iconRadius,
+                    top: y - iconRadius,
+                    child: Container(
+                      width: iconRadius * 2,
+                      height: iconRadius * 2,
+                      decoration: BoxDecoration(
+                        color: eventType.backgroundColor,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: eventType.accentColor, width: 2),
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)],
+                      ),
+                      child: Icon(eventType.icon, size: 20, color: eventType.accentColor),
+                    ),
+                  );
+                }).toList(),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ClockPainter extends CustomPainter {
+  final List<Map<String, dynamic>> events;
+  final DateTime wakeTime;
+  final DateTime sleepTime;
+  final int totalMinutes;
+  final double startAngle;
+  final double sweepAngle;
+
+  _ClockPainter({
+    required this.events,
+    required this.wakeTime,
+    required this.sleepTime,
+    required this.totalMinutes,
+    required this.startAngle,
+    required this.sweepAngle,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+
+    final basePaint = Paint()
+      ..color = Colors.grey.shade200
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 24
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawArc(rect, startAngle, sweepAngle, false, basePaint);
+
+    for (var event in events) {
+      final cat = event['category'];
+      final eventType = EventType.fromBackend(cat, event['metadata'] ?? {});
+      
+      if ((cat == 'nap' || cat == 'night_waking') && event['end_time'] != null) {
+        final start = DateTime.parse(event['start_time']).toLocal();
+        final end = DateTime.parse(event['end_time']).toLocal();
+
+        if (start.isBefore(sleepTime) && end.isAfter(wakeTime)) {
+          final clampedStart = start.isBefore(wakeTime) ? wakeTime : start;
+          final clampedEnd = end.isAfter(sleepTime) ? sleepTime : end;
+
+          final startFraction = clampedStart.difference(wakeTime).inMinutes / totalMinutes;
+          final endFraction = clampedEnd.difference(wakeTime).inMinutes / totalMinutes;
+
+          final itemStartAngle = startAngle + (startFraction * sweepAngle);
+          final itemSweepAngle = (endFraction - startFraction) * sweepAngle;
+
+          final highlightPaint = Paint()
+            ..color = eventType.accentColor.withOpacity(0.3)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 24
+            ..strokeCap = StrokeCap.round;
+
+          canvas.drawArc(rect, itemStartAngle, itemSweepAngle, false, highlightPaint);
+        }
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+class _SleepAnchor {
+  final DateTime time;
+  final bool isWake;
+  _SleepAnchor(this.time, this.isWake);
+}
+
+class _SeparatorItem extends StatelessWidget {
+  final String label;
+  final Duration duration;
+
+  const _SeparatorItem(this.label, this.duration, Key key) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final h = duration.inHours;
+    final m = duration.inMinutes % 60;
+    final timeStr = (h > 0 && m > 0) ? '${h}h ${m}m' : (h > 0 ? '${h}h' : '${m}m');
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10.0),
+      child: Row(
+        children: [
+          Expanded(child: Divider(color: Colors.grey.withOpacity(0.3), thickness: 1)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12.0),
+            child: Text(
+              '$label $timeStr',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade600,
+                letterSpacing: 0.3,
+              ),
+            ),
+          ),
+          Expanded(child: Divider(color: Colors.grey.withOpacity(0.3), thickness: 1)),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SELECTOR DE FECHA CON CALENDARIO SEMANAL Y PUNTOS INDICADORES
+// ─────────────────────────────────────────────────────────────────────────────
+class _DateSelector extends ConsumerStatefulWidget {
+  const _DateSelector();
+
+  @override
+  ConsumerState<_DateSelector> createState() => _DateSelectorState();
+}
+
+class _DateSelectorState extends ConsumerState<_DateSelector> {
+  late PageController _pageController;
+  final int _baseIndex = 10000;
+
+  @override
+  void initState() {
+    super.initState();
+    final selectedDate = ref.read(selectedDateProvider);
+    _pageController = PageController(initialPage: _baseIndex - _weeksAgo(selectedDate));
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  int _weeksAgo(DateTime date) {
+    final today = DateTime.now();
+    final currentMonday = DateTime(today.year, today.month, today.day).subtract(Duration(days: today.weekday - 1));
+    final dateMonday = DateTime(date.year, date.month, date.day).subtract(Duration(days: date.weekday - 1));
+    return currentMonday.difference(dateMonday).inDays ~/ 7;
+  }
+
+  String _label(DateTime selectedDate) {
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    final selected = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+
+    if (selected == todayDate) return 'Hoy';
+    if (selected == todayDate.subtract(const Duration(days: 1))) return 'Ayer';
+
+    const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    return '${selected.day} ${months[selected.month - 1]} ${selected.year}';
+  }
+
+  // TODO: Conectar esto con un provider mensual/semanal para saber qué días tienen eventos reales
+  bool _hasEventsMock(DateTime date) {
+    final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    // Simula que hoy y ayer tienen eventos registrados para que veas el punto visualmente
+    return date == today || date == today.subtract(const Duration(days: 1));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedDate = ref.watch(selectedDateProvider);
+    final todayDate = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
+    final targetPage = _baseIndex - _weeksAgo(selectedDate);
+    if (_pageController.hasClients && _pageController.page?.round() != targetPage) {
+      _pageController.animateToPage(targetPage, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InkWell(
+          onTap: () async {
+            final date = await showDatePicker(
+              context: context,
+              initialDate: selectedDate,
+              firstDate: todayDate.subtract(const Duration(days: 365)),
+              lastDate: todayDate,
+              helpText: 'SELECCIONA UNA FECHA',
+              cancelText: 'CANCELAR',
+              confirmText: 'ACEPTAR',
+            );
+            if (date != null) {
+              ref.read(selectedDateProvider.notifier).state = date;
+            }
+          },
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _label(selectedDate),
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const Icon(Icons.arrow_drop_down_rounded),
+              ],
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 4),
+
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: ['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(
+            (d) => SizedBox(
+              width: 36,
+              child: Text(
+                d,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ).toList(),
+        ),
+
+        const SizedBox(height: 8),
+
+        SizedBox(
+          height: 55, // Aumentado ligeramente para acomodar el punto debajo
+          child: PageView.builder(
+            controller: _pageController,
+            itemBuilder: (context, index) {
+              final weeksAgo = _baseIndex - index;
+              final currentMonday = todayDate.subtract(Duration(days: todayDate.weekday - 1));
+              final weekMonday = currentMonday.subtract(Duration(days: weeksAgo * 7));
+
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: List.generate(7, (dayIndex) {
+                  final date = weekMonday.add(Duration(days: dayIndex));
+                  final isFuture = date.isAfter(todayDate);
+                  final isSelected = date.year == selectedDate.year && date.month == selectedDate.month && date.day == selectedDate.day;
+                  final isToday = date.year == todayDate.year && date.month == todayDate.month && date.day == todayDate.day;
+                  final hasEvents = _hasEventsMock(date); // Reemplazar con lógica real
+
+                  return GestureDetector(
+                    onTap: isFuture ? null : () => ref.read(selectedDateProvider.notifier).state = date,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: isSelected ? primaryColor : Colors.transparent,
+                            shape: BoxShape.circle,
+                            border: isToday && !isSelected
+                                ? Border.all(color: primaryColor, width: 1.5)
+                                : null,
+                          ),
+                          child: Text(
+                            date.day.toString(),
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: isSelected || isToday ? FontWeight.bold : FontWeight.w500,
+                              color: isSelected
+                                  ? Colors.white
+                                  : (isFuture ? Colors.grey.shade300 : Theme.of(context).colorScheme.onSurface),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        // El punto indicador de eventos
+                        Container(
+                          width: 5,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: hasEvents && !isFuture 
+                                ? (isSelected ? primaryColor.withOpacity(0.5) : primaryColor)
+                                : Colors.transparent,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 5),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DASHBOARD DE RESUMEN
+// ─────────────────────────────────────────────────────────────────────────────
+class _SummaryDashboard extends StatelessWidget {
+  final dynamic summary;
+
+  const _SummaryDashboard({required this.summary});
+
+  String _formatMinutes(int minutes) {
+    if (minutes < 60) return '${minutes}m';
+    return '${minutes ~/ 60}h ${minutes % 60}m';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      child: Row(
+        children: [
+          _StatCard(
+            icon: Icons.bedtime_rounded,
+            value: _formatMinutes(summary.totalNapMinutes),
+            label: 'Siesta',
+            color: const Color(0xFF7C83FD),
+          ),
+          const SizedBox(width: 10),
+          _StatCard(
+            icon: Icons.local_drink_rounded,
+            value: '${summary.totalFeeds}',
+            label: 'Tomas',
+            color: const Color(0xFF26C6DA),
+          ),
+          const SizedBox(width: 10),
+          _StatCard(
+            icon: Icons.baby_changing_station_rounded,
+            value: '${summary.totalDirtyDiapers}',
+            label: 'Pañales',
+            color: const Color(0xFFFFB74D),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final String label;
+  final Color color;
+
+  const _StatCard({
+    required this.icon,
+    required this.value,
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: color,
+                  ),
+                ),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CARD DE EVENTO
+// ─────────────────────────────────────────────────────────────────────────────
+class _EventCard extends StatefulWidget {
+  final Map<String, dynamic> event;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+
+  const _EventCard({
+    super.key,
+    required this.event,
+    required this.onTap,
+    required this.onDelete,
+  });
+
+  @override
+  State<_EventCard> createState() => _EventCardState();
+}
+
+class _EventCardState extends State<_EventCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse;
+  late final Animation<double> _pulseAnim;
+
+  late final EventType eventType;
+  late final DateTime startTime;
+  late final DateTime? endTime;
+  late final bool isOngoing;
+  late final String metaStr;
+
+  @override
+  void initState() {
+    super.initState();
+    final event = widget.event;
+    final metadata = event['metadata'] as Map<String, dynamic>? ?? {};
+    eventType = EventType.fromBackend(event['category'], metadata);
+    startTime = DateTime.parse(event['start_time']).toLocal();
+    endTime = event['end_time'] != null
+        ? DateTime.parse(event['end_time']).toLocal()
+        : null;
+    isOngoing = event['end_time'] == null && _isDurationEvent(eventType);
+    metaStr = _buildMetaStr(metadata);
+
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _pulseAnim = Tween<double>(
+      begin: 0.5,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _pulse, curve: Curves.easeInOut));
+    if (isOngoing) _pulse.repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  bool _isDurationEvent(EventType t) =>
+      t == EventType.nap ||
+      t == EventType.nightWaking ||
+      t == EventType.nursing ||
+      t == EventType.pumping;
+
+  String _fmt(DateTime t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  String _duration(DateTime s, DateTime e) {
+    final d = e.difference(s);
+    final h = d.inHours, m = d.inMinutes % 60;
+    if (h > 0 && m > 0) return '${h}h ${m}m';
+    if (h > 0) return '${h}h';
+    return '${m}m';
+  }
+
+  String _buildMetaStr(Map<String, dynamic> meta) {
+    if (meta.isEmpty) return '';
+    final details = <String>[];
+    if (meta['milk_type'] != null) details.add(meta['milk_type']);
+    if (meta['amount_ml'] != null) details.add('${meta['amount_ml']} ml');
+    if (meta['amount']?.toString().isNotEmpty == true) details.add(meta['amount'].toString());
+    if (meta['ui_condition'] != null) details.add(meta['ui_condition']);
+    else if (meta['condition'] != null) details.add(meta['condition']);
+    if (meta['celsius'] != null) details.add('${meta['celsius']}°C');
+    if (meta['how'] != null) details.add(meta['how']);
+    if (meta['mood'] != null) details.add(meta['mood']);
+    if (meta['ended'] != null) details.add(meta['ended']);
+    String result = details.join(' · ');
+    if (meta['notes']?.toString().isNotEmpty == true) {
+      if (result.isNotEmpty) result += '\n';
+      result += '📝 ${meta['notes']}';
+    }
+    return result;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final Color accent = eventType.accentColor;
+
+    final timeDisplay = endTime != null
+        ? '${_fmt(startTime)} → ${_fmt(endTime!)}'
+        : _fmt(startTime);
+    final durationLabel = endTime != null
+        ? _duration(startTime, endTime!)
+        : null;
+
+    return Dismissible(
+      key: ValueKey('dismiss_${widget.event['id']}'),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: Colors.red.shade700,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        child: const Icon(
+          Icons.delete_sweep_rounded,
+          color: Colors.white,
+          size: 26,
+        ),
+      ),
+      confirmDismiss: (_) => showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Eliminar registro'),
+          content: Text('¿Deseas borrar este evento de ${eventType.uiLabel}?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('CANCELAR'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('BORRAR'),
+            ),
+          ],
+        ),
+      ),
+      onDismissed: (_) => widget.onDelete(),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: isOngoing
+              ? accent.withOpacity(0.12)
+              : eventType.backgroundColor,
+          borderRadius: BorderRadius.circular(14),
+          border: Border(left: BorderSide(color: accent, width: 4)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.055),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            onTap: widget.onTap,
+            borderRadius: BorderRadius.circular(14),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: accent.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: Icon(eventType.icon, color: accent, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              eventType.uiLabel,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                                color: onSurface,
+                              ),
+                            ),
+                            if (isOngoing) ...[
+                              const SizedBox(width: 8),
+                              _OngoingBadge(anim: _pulseAnim, color: accent),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.access_time_rounded,
+                              size: 13,
+                              color: onSurface.withOpacity(0.45),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              timeDisplay,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: onSurface.withOpacity(0.6),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            if (durationLabel != null) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: accent.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  durationLabel,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: accent,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        if (metaStr.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            metaStr,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: onSurface.withOpacity(0.45),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: onSurface.withOpacity(0.25),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OngoingBadge extends StatelessWidget {
+  final Animation<double> anim;
+  final Color color;
+  const _OngoingBadge({required this.anim, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: anim,
+      builder: (_, __) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1 + 0.1 * anim.value),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: color.withOpacity(0.4 + 0.4 * anim.value),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: color.withOpacity(0.6 + 0.4 * anim.value),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'EN CURSO',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: color,
+                letterSpacing: 0.4,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final bool isToday;
+  const _EmptyState({required this.isToday});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.inbox_rounded,
+            size: 56,
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            isToday ? 'Aún no hay eventos hoy.' : 'Sin eventos este día.',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+              fontSize: 15,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
