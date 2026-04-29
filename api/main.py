@@ -1,20 +1,20 @@
 from datetime import date
-from typing import Optional, List
+from typing import Optional
 import logging
 
-from fastapi import FastAPI, Depends, HTTPException, Request, status
+from fastapi import FastAPI, Depends, HTTPException, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 
-from services.sleep_service import SleepService
+from services.prediction_service import PredictionService
 from models.analytics_models import DailySummary
 from models.event_models import EventCategory, EventUpdate, EventBase
 from models.baby_models import BabyCreate
 from services.baby_service import BabyService
 from services.event_service import EventService
 from services.analytics_service import AnalyticsService
-from dependencies import get_analytics_service, get_baby_service, get_event_service, get_sleep_service
+from dependencies import get_analytics_service, get_baby_service, get_event_service, get_prediction_service
 
 # --- CONFIGURACIÓN ---
 logging.basicConfig(level=logging.INFO)
@@ -133,7 +133,7 @@ def get_events_by_date_range(
 @app.get("/analytics/{baby_id}/sleep-prediction", tags=["Analytics"])
 def get_sleep_prediction(
     baby_id: str, 
-    service: SleepService = Depends(get_sleep_service)
+    service: PredictionService = Depends(get_prediction_service)
 ):
     """
     Calcula la agenda estimada de siestas y hora de dormir basada en 
@@ -162,7 +162,7 @@ def get_sleep_prediction(
 @app.get("/analytics/{baby_id}/wake-prediction", tags=["Analytics"])
 def get_wake_prediction(
     baby_id: str, 
-    service: SleepService = Depends(get_sleep_service)
+    service: PredictionService = Depends(get_prediction_service)
 ):
     try:
         prediction = service.calculate_wake_prediction(baby_id)
@@ -184,3 +184,41 @@ def get_wake_prediction(
             status_code=500, 
             detail=f"Error en el cálculo de despertar: {str(e)}"
         )
+    
+@app.get("/analytics/{baby_id}/stats", tags=["Analytics"])
+def get_stats(
+    baby_id: str, 
+    start_date: str = Query(..., description="Formato YYYY-MM-DD"), 
+    end_date: str = Query(..., description="Formato YYYY-MM-DD"), 
+    category: str = Query(..., description="Categoría principal (ej: Sueño)"), 
+    subcategory: str = Query("Todo", description="Subcategoría (ej: Siestas)"),
+    service: AnalyticsService = Depends(get_analytics_service)
+):
+    try:
+        # Aquí puedes usar el patrón de Factory que mencionamos
+        if category == "Sueño":
+            if subcategory == "Siestas":
+                return {
+                    "status": "success",
+                    "data": service.generate_nap_sleep_stats(baby_id, start_date, end_date)
+                }
+            elif subcategory == "Sueño Nocturno":
+                return {
+                    "status": "success",
+                    "data": service.generate_night_sleep_stats(baby_id, start_date, end_date)
+                }
+            else:
+                return {"status": "success", "data": {"summary_cards": [], "charts": []}}
+            
+        elif category == "Alimentación":
+            # Devolvemos un mock vacío para evitar crash si el usuario toca otra pestaña
+            return {"status": "success", "data": {"summary_cards": [], "charts": []}}
+            
+        elif category == "Pañales":
+            return {"status": "success", "data": {"summary_cards": [], "charts": []}}
+            
+        else:
+            raise HTTPException(status_code=400, detail="Categoría no soportada")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generando estadísticas: {str(e)}")

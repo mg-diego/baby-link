@@ -1,10 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import '../../providers/events_provider.dart';
 
+final selectedDateRangeProvider = StateProvider<DateTimeRange>((ref) {
+  final now = DateTime.now();
+  return DateTimeRange(
+    start: now.subtract(const Duration(days: 6)),
+    end: now,
+  );
+});
+
 class DateSelector extends ConsumerStatefulWidget {
-  final String babyId;
-  const DateSelector({super.key, required this.babyId});
+  final String? babyId;
+  final bool isRangeMode;
+
+  const DateSelector({
+    super.key,
+    this.babyId,
+    this.isRangeMode = false,
+  });
 
   @override
   ConsumerState<DateSelector> createState() => _DateSelectorState();
@@ -17,10 +32,13 @@ class _DateSelectorState extends ConsumerState<DateSelector> {
   @override
   void initState() {
     super.initState();
-    final selectedDate = ref.read(selectedDateProvider);
-    _pageController = PageController(
-      initialPage: _baseIndex - _weeksAgo(selectedDate),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final selectedDate = ref.read(selectedDateProvider);
+      final selectedRange = ref.read(selectedDateRangeProvider);
+      final targetDate = widget.isRangeMode ? selectedRange.end : selectedDate;
+      _pageController.jumpToPage(_baseIndex - _weeksAgo(targetDate));
+    });
+    _pageController = PageController(initialPage: _baseIndex);
   }
 
   @override
@@ -45,38 +63,38 @@ class _DateSelectorState extends ConsumerState<DateSelector> {
     return diffInDays ~/ 7;
   }
 
-  String _label(DateTime selectedDate) {
+  String _label(DateTime date, DateTimeRange range) {
     final today = DateTime.now();
     final todayDate = DateTime(today.year, today.month, today.day);
-    final selected = DateTime(
-      selectedDate.year,
-      selectedDate.month,
-      selectedDate.day,
-    );
 
-    if (selected == todayDate) return 'Hoy';
-    if (selected == todayDate.subtract(const Duration(days: 1))) return 'Ayer';
+    String format(DateTime d) {
+      final selected = DateTime(d.year, d.month, d.day);
+      if (selected == todayDate) return 'Hoy';
+      if (selected == todayDate.subtract(const Duration(days: 1))) {
+        return 'Ayer';
+      }
+      const months = [
+        'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+        'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
+      ];
+      return '${selected.day} ${months[selected.month - 1]} ${selected.year}';
+    }
 
-    const months = [
-      'Ene',
-      'Feb',
-      'Mar',
-      'Abr',
-      'May',
-      'Jun',
-      'Jul',
-      'Ago',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dic',
-    ];
-    return '${selected.day} ${months[selected.month - 1]} ${selected.year}';
+    if (widget.isRangeMode) {
+      final startStr = format(range.start);
+      final endStr = format(range.end);
+      if (range.start.isAtSameMomentAs(range.end)) return startStr;
+      return '$startStr - $endStr';
+    }
+
+    return format(date);
   }
 
   @override
   Widget build(BuildContext context) {
     final selectedDate = ref.watch(selectedDateProvider);
+    final selectedRange = ref.watch(selectedDateRangeProvider);
+
     final todayDate = DateTime(
       DateTime.now().year,
       DateTime.now().month,
@@ -84,9 +102,11 @@ class _DateSelectorState extends ConsumerState<DateSelector> {
     );
     final primaryColor = Theme.of(context).colorScheme.primary;
 
-    final validDatesAsync = ref.watch(validEventDatesProvider(widget.babyId));
-    final Set<DateTime> validDates =
-        validDatesAsync.asData?.value ?? {todayDate};
+    Set<DateTime> validDates = {};
+    if (widget.babyId != null) {
+      final validDatesAsync = ref.watch(validEventDatesProvider(widget.babyId!));
+      validDates = validDatesAsync.asData?.value ?? {todayDate};
+    }
 
     DateTime minimumDate = DateTime(2023);
     if (validDates.isNotEmpty) {
@@ -102,7 +122,20 @@ class _DateSelectorState extends ConsumerState<DateSelector> {
       minimumDate = safeSelectedDate;
     }
 
-    final targetPage = _baseIndex - _weeksAgo(selectedDate);
+    if (widget.isRangeMode) {
+      final safeStartRange = DateTime(
+        selectedRange.start.year,
+        selectedRange.start.month,
+        selectedRange.start.day,
+      );
+      if (safeStartRange.isBefore(minimumDate)) {
+        minimumDate = safeStartRange;
+      }
+    }
+
+    final targetDate = widget.isRangeMode ? selectedRange.end : selectedDate;
+    final targetPage = _baseIndex - _weeksAgo(targetDate);
+
     if (_pageController.hasClients &&
         _pageController.page?.round() != targetPage) {
       _pageController.animateToPage(
@@ -119,34 +152,62 @@ class _DateSelectorState extends ConsumerState<DateSelector> {
       children: [
         InkWell(
           onTap: () async {
-            final date = await showDatePicker(
-              context: context,
-              initialDate: selectedDate,
-              firstDate: minimumDate,
-              lastDate: todayDate,
-              helpText: 'SELECCIONA UNA FECHA',
-              cancelText: 'CANCELAR',
-              confirmText: 'ACEPTAR',
-              selectableDayPredicate: (DateTime day) {
-                final normalizedDay = DateTime(day.year, day.month, day.day);
-                return validDates.contains(normalizedDay) ||
-                    normalizedDay == todayDate;
-              },
-              builder: (context, child) {
-                return Theme(
-                  data: Theme.of(context).copyWith(
-                    colorScheme: ColorScheme.light(
-                      primary: primaryColor,
-                      onPrimary: Colors.white,
-                      onSurface: Colors.black87,
+            if (widget.isRangeMode) {
+              final range = await showDateRangePicker(
+                context: context,
+                initialDateRange: selectedRange,
+                firstDate: DateTime(2020),
+                lastDate: todayDate,
+                helpText: 'SELECCIONA UN RANGO',
+                cancelText: 'CANCELAR',
+                confirmText: 'ACEPTAR',
+                builder: (context, child) {
+                  return Theme(
+                    data: Theme.of(context).copyWith(
+                      colorScheme: ColorScheme.light(
+                        primary: primaryColor,
+                        onPrimary: Colors.white,
+                        onSurface: Colors.black87,
+                      ),
                     ),
-                  ),
-                  child: child!,
-                );
-              },
-            );
-            if (date != null) {
-              ref.read(selectedDateProvider.notifier).state = date;
+                    child: child!,
+                  );
+                },
+              );
+              if (range != null) {
+                ref.read(selectedDateRangeProvider.notifier).state = range;
+              }
+            } else {
+              final date = await showDatePicker(
+                context: context,
+                initialDate: selectedDate,
+                firstDate: widget.babyId == null ? DateTime(2020) : minimumDate,
+                lastDate: todayDate,
+                helpText: 'SELECCIONA UNA FECHA',
+                cancelText: 'CANCELAR',
+                confirmText: 'ACEPTAR',
+                selectableDayPredicate: (DateTime day) {
+                  if (widget.babyId == null) return true;
+                  final normalizedDay = DateTime(day.year, day.month, day.day);
+                  return validDates.contains(normalizedDay) ||
+                      normalizedDay == todayDate;
+                },
+                builder: (context, child) {
+                  return Theme(
+                    data: Theme.of(context).copyWith(
+                      colorScheme: ColorScheme.light(
+                        primary: primaryColor,
+                        onPrimary: Colors.white,
+                        onSurface: Colors.black87,
+                      ),
+                    ),
+                    child: child!,
+                  );
+                },
+              );
+              if (date != null) {
+                ref.read(selectedDateProvider.notifier).state = date;
+              }
             }
           },
           borderRadius: BorderRadius.circular(8),
@@ -156,7 +217,7 @@ class _DateSelectorState extends ConsumerState<DateSelector> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  _label(selectedDate),
+                  _label(selectedDate, selectedRange),
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -168,7 +229,7 @@ class _DateSelectorState extends ConsumerState<DateSelector> {
           ),
         ),
         const SizedBox(height: 8),
-        SizedBox(
+        if (!widget.isRangeMode) SizedBox(
           height: 75,
           child: PageView.builder(
             controller: _pageController,
@@ -200,14 +261,33 @@ class _DateSelectorState extends ConsumerState<DateSelector> {
                   );
 
                   final isFuture = normalizedDate.isAfter(todayDate);
-                  final isSelected = normalizedDate.isAtSameMomentAs(
-                    DateTime(
-                      selectedDate.year,
-                      selectedDate.month,
-                      selectedDate.day,
-                    ),
-                  );
                   final isToday = normalizedDate.isAtSameMomentAs(todayDate);
+
+                  final isSelected = widget.isRangeMode
+                      ? (normalizedDate.isAtSameMomentAs(DateTime(
+                              selectedRange.start.year,
+                              selectedRange.start.month,
+                              selectedRange.start.day)) ||
+                          normalizedDate.isAtSameMomentAs(DateTime(
+                              selectedRange.end.year,
+                              selectedRange.end.month,
+                              selectedRange.end.day)))
+                      : normalizedDate.isAtSameMomentAs(DateTime(
+                          selectedDate.year,
+                          selectedDate.month,
+                          selectedDate.day));
+
+                  final isInRange = widget.isRangeMode
+                      ? (normalizedDate.isAfter(DateTime(
+                              selectedRange.start.year,
+                              selectedRange.start.month,
+                              selectedRange.start.day)) &&
+                          normalizedDate.isBefore(DateTime(
+                              selectedRange.end.year,
+                              selectedRange.end.month,
+                              selectedRange.end.day)))
+                      : false;
+
                   final bool hasEvents = validDates.any(
                     (d) =>
                         d.year == normalizedDate.year &&
@@ -215,11 +295,26 @@ class _DateSelectorState extends ConsumerState<DateSelector> {
                         d.day == normalizedDate.day,
                   );
 
-                  final isSelectable = hasEvents || isToday;
+                  final isSelectable =
+                      widget.babyId == null || widget.isRangeMode || hasEvents || isToday;
                   final isDisabled = isFuture || !isSelectable;
 
                   return GestureDetector(
-                    onTap: isDisabled ? null : () => ref.read(selectedDateProvider.notifier).state = date,
+                    onTap: isDisabled
+                        ? null
+                        : () {
+                            if (widget.isRangeMode) {
+                              ref
+                                  .read(selectedDateRangeProvider.notifier)
+                                  .state = DateTimeRange(
+                                start: date,
+                                end: date,
+                              );
+                            } else {
+                              ref.read(selectedDateProvider.notifier).state =
+                                  date;
+                            }
+                          },
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -239,7 +334,9 @@ class _DateSelectorState extends ConsumerState<DateSelector> {
                           decoration: BoxDecoration(
                             color: isSelected
                                 ? primaryColor
-                                : Colors.transparent,
+                                : (isInRange
+                                    ? primaryColor.withOpacity(0.15)
+                                    : Colors.transparent),
                             shape: BoxShape.circle,
                             border: isToday && !isSelected
                                 ? Border.all(color: primaryColor, width: 1.5)
@@ -255,12 +352,10 @@ class _DateSelectorState extends ConsumerState<DateSelector> {
                               color: isSelected
                                   ? Colors.white
                                   : (isDisabled
-                                        ? Colors.grey.withOpacity(
-                                            0.4,
-                                          ) // <-- Aquí aplicamos el gris si no hay eventos
-                                        : Theme.of(
-                                            context,
-                                          ).colorScheme.onSurface),
+                                      ? Colors.grey.withOpacity(0.4)
+                                      : Theme.of(context)
+                                          .colorScheme
+                                          .onSurface),
                             ),
                           ),
                         ),
@@ -271,8 +366,8 @@ class _DateSelectorState extends ConsumerState<DateSelector> {
                           decoration: BoxDecoration(
                             color: hasEvents && !isFuture
                                 ? (isSelected
-                                      ? Colors.white.withOpacity(0.8)
-                                      : primaryColor)
+                                    ? Colors.white.withOpacity(0.8)
+                                    : primaryColor)
                                 : Colors.transparent,
                             shape: BoxShape.circle,
                           ),
@@ -285,8 +380,47 @@ class _DateSelectorState extends ConsumerState<DateSelector> {
             },
           ),
         ),
+        if (widget.isRangeMode) ...[
+          const SizedBox(height: 12),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                _buildQuickChip(context, '7 días', todayDate.subtract(const Duration(days: 6)), todayDate),
+                _buildQuickChip(context, '30 días', todayDate.subtract(const Duration(days: 29)), todayDate),
+                _buildQuickChip(context, '3 meses', DateTime(todayDate.year, todayDate.month - 3, todayDate.day), todayDate),
+                _buildQuickChip(context, '6 meses', DateTime(todayDate.year, todayDate.month - 6, todayDate.day), todayDate),
+                _buildQuickChip(context, 'Todo', minimumDate, todayDate),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 5),
       ],
+    );
+  }
+
+  Widget _buildQuickChip(BuildContext context, String label, DateTime start, DateTime end) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8.0),
+      child: ActionChip(
+        label: Text(
+          label,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+        ),
+        backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide.none,
+        ),
+        onPressed: () {
+          ref.read(selectedDateRangeProvider.notifier).state = DateTimeRange(
+            start: start,
+            end: end,
+          );
+        },
+      ),
     );
   }
 }

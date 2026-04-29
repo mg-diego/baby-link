@@ -1,4 +1,5 @@
 import 'package:app/core/models/event_type.dart';
+import 'package:app/core/widgets/custom_top_bar.dart';
 import 'package:app/features/babies/providers/baby_provider.dart';
 import 'package:app/features/events/views/forms/basic_notes_form.dart';
 import 'package:app/features/events/views/forms/bed_time_form.dart';
@@ -330,9 +331,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
-      appBar: AppBar(
-        // ── TOP BAR CON FOTO, NOMBRE Y EDAD ──
-        title: babyAsync.when(
+      appBar: CustomTopBar(
+        centerContent: babyAsync.when(
           data: (baby) {
             if (baby == null) {
               return const Text(
@@ -397,7 +397,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20),
           ),
         ),
-        centerTitle: true,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),

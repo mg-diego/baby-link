@@ -2,6 +2,7 @@ import 'package:app/api/api_service.dart';
 import 'package:app/core/widgets/global_event_controller.dart';
 import 'package:app/features/analytics/views/stats_screen.dart';
 import 'package:app/features/events/providers/events_provider.dart';
+import 'package:app/features/profile/screens/profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -67,8 +68,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     final pages = [
       HomeScreen(babyId: babyId),
       EventLoggerScreen(babyId: babyId),
-      StatsScreen(babyId: babyId),
-      const Center(child: Text("Perfil en construcción 🚧")),
+      StatsScreen(babyId: babyId)
     ];
 
     return Scaffold(
@@ -134,17 +134,6 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             ),
             label: "",
           ),
-          BottomNavigationBarItem(
-            icon: SvgPicture.string(
-              userIcon,
-              colorFilter: const ColorFilter.mode(inActiveIconColor, BlendMode.srcIn),
-            ),
-            activeIcon: SvgPicture.string(
-              userIcon,
-              colorFilter: const ColorFilter.mode(Color(0xFFFF7643), BlendMode.srcIn),
-            ),
-            label: "",
-          ),
         ],
       ),
     );
@@ -161,6 +150,3 @@ const addIcon =
 
 const statsIcon =
     '''<svg fill="#000000" width="181px" height="181px" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"><path d="M1.75 13.25V1.5H.5v12a1.24 1.24 0 0 0 1.22 1H15.5v-1.25z"></path><path d="M3.15 8H4.4v3.9H3.15zm3.26-4h1.26v7.9H6.41zm3.27 2h1.25v5.9H9.68zm3.27-3.5h1.25v9.4h-1.25z"></path></g></svg>''';
-
-const userIcon =
-    '''<svg fill="#000000" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"><path d="M12,11A5,5,0,1,0,7,6,5.006,5.006,0,0,0,12,11Zm0-8A3,3,0,1,1,9,6,3,3,0,0,1,12,3ZM3,22V18a5.006,5.006,0,0,1,5-5h8a5.006,5.006,0,0,1,5,5v4a1,1,0,0,1-2,0V18a3,3,0,0,0-3-3H8a3,3,0,0,0-3,3v4a1,1,0,0,1-2,0Z"></path></g></svg>''';

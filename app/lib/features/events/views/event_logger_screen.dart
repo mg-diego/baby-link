@@ -1,3 +1,4 @@
+import 'package:app/core/widgets/custom_top_bar.dart';
 import 'package:app/features/events/views/forms/nursing_form.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -254,11 +255,8 @@ class EventLoggerScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
-      appBar: AppBar(
-        title: const Text('Registrar Actividad', style: TextStyle(fontWeight: FontWeight.w800)),
-        centerTitle: true,
-        elevation: 0,
-        backgroundColor: Colors.transparent,
+      appBar: CustomTopBar(
+        centerContent: const Text('Registrar Actividad', style: TextStyle(fontWeight: FontWeight.w800)),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 48),

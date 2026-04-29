@@ -10,7 +10,7 @@ from repositories.analytics_repository import AnalyticsRepository
 from services.baby_service import BabyService
 from services.event_service import EventService
 from services.analytics_service import AnalyticsService
-from services.sleep_service import SleepService
+from services.prediction_service import PredictionService
 
 load_dotenv()
 
@@ -39,5 +39,5 @@ def get_analytics_repository(db: Client = Depends(get_supabase)) -> AnalyticsRep
 def get_analytics_service(repository: AnalyticsRepository = Depends(get_analytics_repository)) -> AnalyticsService:
     return AnalyticsService(repository)
 
-def get_sleep_service(repository: EventRepository = Depends(get_event_repository)) -> SleepService:
-    return SleepService(repository)
+def get_prediction_service(repository: EventRepository = Depends(get_event_repository)) -> PredictionService:
+    return PredictionService(repository)

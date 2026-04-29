@@ -1,13 +1,19 @@
-// lib/main.dart
-
-import 'package:app/features/events/views/main_screen.dart';
+import 'package:app/features/auth/widgets/auth_wrapper.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'features/babies/providers/baby_provider.dart';
-import 'features/babies/views/baby_form_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await dotenv.load(fileName: ".env");
+
+  await Supabase.initialize(
+    url: dotenv.env['SUPABASE_URL']!,
+    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
+  );
+
   runApp(const ProviderScope(child: BabyLinkApp()));
 }
 
@@ -16,13 +22,11 @@ class BabyLinkApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final babyAsync = ref.watch(babyProvider);
-
     return MaterialApp(
       title: 'BabyLink MVP',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFFF7643), // Tu naranja actual
+          seedColor: const Color(0xFFFF7643),
           brightness: Brightness.light,
         ),
         useMaterial3: true,
@@ -45,13 +49,7 @@ class BabyLinkApp extends ConsumerWidget {
         ),
       ),
       themeMode: ThemeMode.dark,
-      home: babyAsync.when(
-        data: (baby) => baby == null 
-            ? const BabyFormScreen() 
-            : MainScreen(baby: baby),
-        loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-        error: (err, stack) => Scaffold(body: Center(child: Text('Error: $err'))),
-      ),
+      home: const AuthWrapper(),
     );
   }
 }

@@ -2,7 +2,7 @@ import numpy as np
 from datetime import datetime, timedelta
 from repositories.event_repository import EventRepository
 
-class SleepService:
+class PredictionService:
     def __init__(self, repository: EventRepository):
         self.repository = repository
 

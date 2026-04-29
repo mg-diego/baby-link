@@ -230,4 +230,42 @@ class ApiService {
     
     return null;
   }
+
+  static Future<Map<String, dynamic>?> getStats({
+    required String babyId,
+    required DateTime startDate,
+    required DateTime endDate,
+    required String category,
+    String subcategory = 'Todo',
+  }) async {
+    // Formateamos las fechas a YYYY-MM-DD para FastAPI
+    final startStr = '${startDate.year}-${startDate.month.toString().padLeft(2, '0')}-${startDate.day.toString().padLeft(2, '0')}';
+    final endStr = '${endDate.year}-${endDate.month.toString().padLeft(2, '0')}-${endDate.day.toString().padLeft(2, '0')}';
+
+    // Usamos .replace para añadir los query parameters de forma segura
+    final uri = Uri.parse('${AppConstants.apiUrl}/analytics/$babyId/stats').replace(
+      queryParameters: {
+        'start_date': startStr,
+        'end_date': endStr,
+        'category': category,
+        'subcategory': subcategory,
+      },
+    );
+
+    try {
+      final response = await http.get(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final jsonResponse = jsonDecode(response.body);
+        return jsonResponse['data'];
+      }
+      
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
 }

@@ -30,3 +30,17 @@ class AnalyticsRepository:
             .execute()
             
         return response.data
+    
+    def get_events_by_category(self, baby_id: str, category: str, start_date: str, end_date: str):        
+        end_datetime = f"{end_date}T23:59:59"
+        
+        response = self.db.table('baby_events')\
+            .select("*")\
+            .eq("baby_id", baby_id)\
+            .eq("category", category)\
+            .gte("start_time", start_date)\
+            .lte("start_time", end_datetime)\
+            .order("start_time", desc=False)\
+            .execute()
+            
+        return response.data
