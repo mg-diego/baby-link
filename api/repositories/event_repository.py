@@ -1,5 +1,6 @@
 from typing import List
 from supabase import Client
+from datetime import datetime, timedelta
 
 class EventRepository:
     def __init__(self, db_client: Client):
@@ -57,7 +58,6 @@ class EventRepository:
         limit = 1000
         
         while True:
-            # Pedimos los datos en bloques (0 a 999, 1000 a 1999, etc.)
             response = (
                 self.db.table("baby_events")
                 .select("start_time")
@@ -69,10 +69,30 @@ class EventRepository:
             if response.data:
                 all_data.extend(response.data)
                 
-            # Si nos devuelven menos filas del límite (o ninguna), hemos terminado
             if not response.data or len(response.data) < limit:
                 break
                 
             offset += limit
             
         return all_data
+    
+    def get_recent_events(self, baby_id: str, days: int = 30):        
+        cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+        
+        response = self.db.table("baby_events")\
+            .select("*")\
+            .eq("baby_id", baby_id)\
+            .gte("start_time", cutoff)\
+            .order("start_time", desc=False)\
+            .execute()
+            
+        return response.data
+
+    def get_baby_info(self, baby_id: str):
+        response = self.db.table("babies")\
+            .select("dob, name")\
+            .eq("id", baby_id)\
+            .single()\
+            .execute()
+        return response.data
+    

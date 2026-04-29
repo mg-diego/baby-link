@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import '../core/constants.dart';
 
 class ApiService {
+  // BABIES
   static Future<String?> registerBaby(
     String name,
     String dob,
@@ -22,6 +23,20 @@ class ApiService {
     throw Exception('Error al registrar bebe');
   }
 
+  static Future<List<dynamic>> getBabies(String userId) async {
+    final response = await http.get(
+      Uri.parse('${AppConstants.apiUrl}/babies/$userId'),
+      headers: {'Content-Type': 'application/json'},
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['data'];
+    }
+    return [];
+  }
+
+  //EVENTS
   static Future<Map<String, dynamic>> registerEvent(
     String babyId,
     String category,
@@ -48,19 +63,104 @@ class ApiService {
     }
   }
 
-  static Future<List<dynamic>> getBabies(String userId) async {
-    final response = await http.get(
-      Uri.parse('${AppConstants.apiUrl}/babies/$userId'),
-      headers: {'Content-Type': 'application/json'},
-    );
+  static Future<List<Map<String, dynamic>>> getActiveEvents(
+    String babyId,
+  ) async {
+    final url = Uri.parse('${AppConstants.apiUrl}/events/active/$babyId');
 
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return data['data'];
+    try {
+      final response = await http.get(
+        url,
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final dataList = decoded['data'] as List;
+        return dataList.map((e) => e as Map<String, dynamic>).toList();
+      }
+      return [];
+    } catch (e) {
+      print('Error obteniendo eventos activos: $e');
+      return [];
     }
-    return [];
   }
 
+  static Future<List<String>> getValidEventDates(String babyId) async {
+    final url = Uri.parse('${AppConstants.apiUrl}/events/valid-dates/$babyId');
+
+    try {
+      final response = await http.get(
+        url,
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode != 200) {
+        final errorMsg =
+            jsonDecode(response.body)['detail'] ?? 'Error desconocido';
+        throw Exception(errorMsg);
+      }
+
+      final data = jsonDecode(response.body);
+      if (data['status'] == 'success') {
+        return List<String>.from(data['dates']);
+      } else {
+        throw Exception(data['message'] ?? 'Error al obtener fechas');
+      }
+    } catch (e) {
+      print('Error en GET /events/valid-dates/$babyId: $e');
+      rethrow;
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateEvent(
+    String eventId,
+    Map<String, dynamic> updateData,
+  ) async {
+    final url = Uri.parse('${AppConstants.apiUrl}/events/$eventId');
+
+    try {
+      final response = await http.patch(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(updateData),
+      );
+
+      if (response.statusCode == 200) {
+        final decodedResponse = jsonDecode(response.body);
+        return decodedResponse['data'] as Map<String, dynamic>;
+      } else {
+        final errorMsg =
+            jsonDecode(response.body)['detail'] ?? 'Error desconocido';
+        throw Exception('Falló la actualización: $errorMsg');
+      }
+    } catch (e) {
+      print('Error en PATCH /events/$eventId: $e');
+      rethrow;
+    }
+  }
+
+  static Future<void> deleteEvent(String eventId) async {
+    final url = Uri.parse('${AppConstants.apiUrl}/events/$eventId');
+
+    try {
+      final response = await http.delete(
+        url,
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode != 200 && response.statusCode != 204) {
+        final errorMsg =
+            jsonDecode(response.body)['detail'] ?? 'Error desconocido';
+        throw Exception(errorMsg);
+      }
+    } catch (e) {
+      print('Error en DELETE /events/$eventId: $e');
+      rethrow;
+    }
+  }
+
+  // ANALYTICS
   static Future<DailySummary?> getDailySummary(
     String babyId,
     DateTime targetDate,
@@ -103,103 +203,31 @@ class ApiService {
     return [];
   }
 
-  static Future<Map<String, dynamic>> updateEvent(
-    String eventId,
-    Map<String, dynamic> updateData,
-  ) async {
-    final url = Uri.parse('${AppConstants.apiUrl}/events/$eventId');
-
-    try {
-      final response = await http.patch(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(updateData),
-      );
-
-      if (response.statusCode == 200) {
-        final decodedResponse = jsonDecode(response.body);
-        return decodedResponse['data'] as Map<String, dynamic>;
-      } else {
-        final errorMsg =
-            jsonDecode(response.body)['detail'] ?? 'Error desconocido';
-        throw Exception('Falló la actualización: $errorMsg');
-      }
-    } catch (e) {
-      print('Error en PATCH /events/$eventId: $e');
-      rethrow;
-    }
-  }
-
-  static Future<List<Map<String, dynamic>>> getActiveEvents(
-    String babyId,
-  ) async {
-    final url = Uri.parse(
-      '${AppConstants.apiUrl}/babies/$babyId/events/active',
+  static Future<List<dynamic>> getSleepPredictions(String babyId) async {
+    final response = await http.get(
+      Uri.parse('${AppConstants.apiUrl}/analytics/$babyId/sleep-prediction'),
+      headers: {'Content-Type': 'application/json'},
     );
 
-    try {
-      final response = await http.get(
-        url,
-        headers: {'Content-Type': 'application/json'},
-      );
-
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        // Hacemos cast seguro a una lista de mapas
-        final dataList = decoded['data'] as List;
-        return dataList.map((e) => e as Map<String, dynamic>).toList();
-      }
-      return [];
-    } catch (e) {
-      print('Error obteniendo eventos activos: $e');
-      return [];
-    }
-  }
-
-  static Future<void> deleteEvent(String eventId) async {
-    final url = Uri.parse('${AppConstants.apiUrl}/events/$eventId');
-
-    try {
-      final response = await http.delete(
-        url,
-        headers: {'Content-Type': 'application/json'},
-      );
-
-      if (response.statusCode != 200 && response.statusCode != 204) {
-        final errorMsg =
-            jsonDecode(response.body)['detail'] ?? 'Error desconocido';
-        throw Exception(errorMsg);
-      }
-    } catch (e) {
-      print('Error en DELETE /events/$eventId: $e');
-      rethrow;
-    }
-  }
-
-  static Future<List<String>> getValidEventDates(String babyId) async {
-    final url = Uri.parse('${AppConstants.apiUrl}/events/valid-dates/$babyId');
-
-    try {
-      final response = await http.get(
-        url,
-        headers: {'Content-Type': 'application/json'},
-      );
-
-      if (response.statusCode != 200) {
-        final errorMsg =
-            jsonDecode(response.body)['detail'] ?? 'Error desconocido';
-        throw Exception(errorMsg);
-      }
-
+    if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      if (data['status'] == 'success') {
-        return List<String>.from(data['dates']);
-      } else {
-        throw Exception(data['message'] ?? 'Error al obtener fechas');
-      }
-    } catch (e) {
-      print('Error en GET /events/valid-dates/$babyId: $e');
-      rethrow;
+      return data is List ? data : data['data'];
     }
+    
+    return [];
+  }
+
+  static Future<Map<String, dynamic>?> getWakePrediction(String babyId) async {
+    final response = await http.get(
+      Uri.parse('${AppConstants.apiUrl}/analytics/$babyId/wake-prediction'),
+      headers: {'Content-Type': 'application/json'},
+    );
+
+    if (response.statusCode == 200) {
+      final jsonResponse = jsonDecode(response.body);
+      return jsonResponse['data'];
+    }
+    
+    return null;
   }
 }

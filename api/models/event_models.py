@@ -25,6 +25,7 @@ class EventBase(BaseModel):
     notes: Optional[str] = None
 
 class EventUpdate(BaseModel):
+    start_time: Optional[str] = None
     end_time: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
     notes: Optional[str] = None

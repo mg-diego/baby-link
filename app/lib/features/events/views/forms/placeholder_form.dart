@@ -4,16 +4,34 @@ import 'package:flutter/material.dart';
 class PlaceholderForm extends StatefulWidget {
   final String title;
   final Function(Map<String, dynamic>, DateTime) onSave;
-  const PlaceholderForm({required this.title, required this.onSave});
+  final Map<String, dynamic>? initialMetadata;
+  final DateTime? initialTime;
+
+  const PlaceholderForm({
+    super.key, 
+    required this.title, 
+    required this.onSave,
+    this.initialMetadata,
+    this.initialTime,
+  });
+
   @override
   State<PlaceholderForm> createState() => PlaceholderFormState();
 }
 
 class PlaceholderFormState extends State<PlaceholderForm> {
-  DateTime _time = DateTime.now();
+  late DateTime _time;
+
+  @override
+  void initState() {
+    super.initState();
+    _time = widget.initialTime ?? DateTime.now();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final isEditing = widget.initialMetadata != null;
+
     return Column(
       children: [
         CustomTimePicker(
@@ -27,7 +45,7 @@ class PlaceholderFormState extends State<PlaceholderForm> {
           height: 50,
           child: ElevatedButton(
             onPressed: () => widget.onSave({'status': 'placeholder'}, _time),
-            child: const Text('Guardar', style: TextStyle(fontSize: 16)),
+            child: Text(isEditing ? 'Guardar cambios' : 'Guardar', style: const TextStyle(fontSize: 16)),
           ),
         ),
       ],

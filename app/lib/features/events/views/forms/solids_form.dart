@@ -3,18 +3,44 @@ import 'package:flutter/material.dart';
 
 class SolidsForm extends StatefulWidget {
   final Function(Map<String, dynamic>, DateTime) onSave;
-  const SolidsForm({required this.onSave});
+  final Map<String, dynamic>? initialMetadata;
+  final DateTime? initialTime;
+
+  const SolidsForm({
+    super.key, 
+    required this.onSave,
+    this.initialMetadata,
+    this.initialTime,
+  });
+
   @override
   State<SolidsForm> createState() => SolidsFormState();
 }
 
 class SolidsFormState extends State<SolidsForm> {
-  DateTime _time = DateTime.now();
-  final _amount = TextEditingController();
-  final _notes = TextEditingController();
+  late DateTime _time;
+  late final TextEditingController _amount;
+  late final TextEditingController _notes;
+
+  @override
+  void initState() {
+    super.initState();
+    _time = widget.initialTime ?? DateTime.now();
+    _amount = TextEditingController(text: widget.initialMetadata?['amount']?.toString() ?? '');
+    _notes = TextEditingController(text: widget.initialMetadata?['notes'] ?? '');
+  }
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    _notes.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final isEditing = widget.initialMetadata != null;
+
     return Column(
       children: [
         CustomTimePicker(
@@ -46,9 +72,9 @@ class SolidsFormState extends State<SolidsForm> {
               'amount': _amount.text,
               'notes': _notes.text,
             }, _time),
-            child: const Text(
-              'Guardar Sólidos',
-              style: TextStyle(fontSize: 16),
+            child: Text(
+              isEditing ? 'Guardar cambios' : 'Guardar Sólidos',
+              style: const TextStyle(fontSize: 16),
             ),
           ),
         ),

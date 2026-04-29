@@ -3,16 +3,16 @@ import 'event_card.dart';
 
 class EventListView extends StatefulWidget {
   final List<Map<String, dynamic>> initialEvents;
-  final List<Map<String, dynamic>> ydayEvents;
+  final List<Map<String, dynamic>> yesterdayEvents;
   final bool isToday;
   final Future<void> Function() onRefresh;
-  final void Function(Map<String, dynamic>) onDelete; // <--- Tipo explícito
-  final void Function(Map<String, dynamic>) onTap;    // <--- Tipo explícito
+  final void Function(Map<String, dynamic>) onDelete;
+  final void Function(Map<String, dynamic>) onTap;
 
   const EventListView({
     super.key,
     required this.initialEvents,
-    required this.ydayEvents,
+    required this.yesterdayEvents,
     required this.isToday,
     required this.onRefresh,
     required this.onDelete,
@@ -33,10 +33,12 @@ class _EventListViewState extends State<EventListView> {
   }
 
   @override
-  void didUpdateWidget(EventListView oldWidget) {
+  void didUpdateWidget(covariant EventListView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.initialEvents != widget.initialEvents) {
-      setState(() => _events = List.from(widget.initialEvents));
+    if (widget.initialEvents != oldWidget.initialEvents) {
+      setState(() {
+        _events = widget.initialEvents;
+      });
     }
   }
 
@@ -84,7 +86,7 @@ class _EventListViewState extends State<EventListView> {
     final sorted = List<Map<String, dynamic>>.from(_events)
       ..sort((a, b) => b['start_time'].compareTo(a['start_time']));
 
-    final allEventsForAnchors = [..._events, ...widget.ydayEvents];
+    final allEventsForAnchors = [..._events, ...widget.yesterdayEvents];
     final anchors = _buildAnchors(allEventsForAnchors);
 
     List<Widget> listItems = [];
@@ -137,7 +139,7 @@ class _EventListViewState extends State<EventListView> {
       onRefresh: widget.onRefresh,
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 20),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
         itemCount: listItems.length,
         itemBuilder: (context, index) => listItems[index],
       ),

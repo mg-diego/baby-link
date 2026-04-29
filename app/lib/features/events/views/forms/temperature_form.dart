@@ -3,18 +3,43 @@ import 'package:flutter/material.dart';
 
 class TemperatureForm extends StatefulWidget {
   final Function(Map<String, dynamic>, DateTime) onSave;
-  const TemperatureForm({required this.onSave});
+  final Map<String, dynamic>? initialMetadata;
+  final DateTime? initialTime;
+
+  const TemperatureForm({
+    super.key, 
+    required this.onSave,
+    this.initialMetadata,
+    this.initialTime,
+  });
+
   @override
   State<TemperatureForm> createState() => TemperatureFormState();
 }
 
 class TemperatureFormState extends State<TemperatureForm> {
-  DateTime _time = DateTime.now();
-  double _temp = 36.5;
-  final _notes = TextEditingController();
+  late DateTime _time;
+  late double _temp;
+  late final TextEditingController _notes;
+
+  @override
+  void initState() {
+    super.initState();
+    _time = widget.initialTime ?? DateTime.now();
+    _temp = (widget.initialMetadata?['celsius'] as num?)?.toDouble() ?? 36.5;
+    _notes = TextEditingController(text: widget.initialMetadata?['notes'] ?? '');
+  }
+
+  @override
+  void dispose() {
+    _notes.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final isEditing = widget.initialMetadata != null;
+
     return Column(
       children: [
         CustomTimePicker(
@@ -48,9 +73,9 @@ class TemperatureFormState extends State<TemperatureForm> {
           child: ElevatedButton(
             onPressed: () =>
                 widget.onSave({'celsius': _temp, 'notes': _notes.text}, _time),
-            child: const Text(
-              'Guardar Temperatura',
-              style: TextStyle(fontSize: 16),
+            child: Text(
+              isEditing ? 'Guardar cambios' : 'Guardar Temperatura',
+              style: const TextStyle(fontSize: 16),
             ),
           ),
         ),

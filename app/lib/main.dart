@@ -16,7 +16,7 @@ class BabyLinkApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final babyAsync = ref.watch(babyExistsProvider);
+    final babyAsync = ref.watch(babyProvider);
 
     return MaterialApp(
       title: 'BabyLink MVP',
@@ -46,9 +46,9 @@ class BabyLinkApp extends ConsumerWidget {
       ),
       themeMode: ThemeMode.dark,
       home: babyAsync.when(
-        data: (babyId) => babyId == null 
+        data: (baby) => baby == null 
             ? const BabyFormScreen() 
-            : MainScreen(babyId: babyId),
+            : MainScreen(baby: baby),
         loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
         error: (err, stack) => Scaffold(body: Center(child: Text('Error: $err'))),
       ),

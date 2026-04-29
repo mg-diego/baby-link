@@ -3,18 +3,43 @@ import 'package:flutter/material.dart';
 
 class DiaperForm extends StatefulWidget {
   final Function(Map<String, dynamic>, DateTime) onSave;
-  const DiaperForm({required this.onSave});
+  final Map<String, dynamic>? initialMetadata;
+  final DateTime? initialTime;
+
+  const DiaperForm({
+    super.key, 
+    required this.onSave,
+    this.initialMetadata,
+    this.initialTime,
+  });
+
   @override
   State<DiaperForm> createState() => DiaperFormState();
 }
 
 class DiaperFormState extends State<DiaperForm> {
-  DateTime _time = DateTime.now();
-  String _condition = 'Seco';
-  final _notes = TextEditingController();
+  late DateTime _time;
+  late String _condition;
+  late final TextEditingController _notes;
+
+  @override
+  void initState() {
+    super.initState();
+    _time = widget.initialTime ?? DateTime.now();
+    _condition = widget.initialMetadata?['ui_condition'] ?? 'Mojado';
+    _notes = TextEditingController(text: widget.initialMetadata?['notes'] ?? '');
+  }
+
+  @override
+  void dispose() {
+    _notes.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final isEditing = widget.initialMetadata != null;
+
     return Column(
       children: [
         CustomTimePicker(
@@ -50,13 +75,15 @@ class DiaperFormState extends State<DiaperForm> {
               String backendCond = 'wet';
               if (_condition == 'Sucio') backendCond = 'dirty';
               if (_condition == 'Variado') backendCond = 'mixed';
+              if (_condition == 'Seco') backendCond = 'clean';
+
               widget.onSave({
                 'condition': backendCond,
                 'ui_condition': _condition,
                 'notes': _notes.text,
               }, _time);
             },
-            child: const Text('Guardar Pañal', style: TextStyle(fontSize: 16)),
+            child: Text(isEditing ? 'Guardar cambios' : 'Guardar Pañal', style: const TextStyle(fontSize: 16)),
           ),
         ),
       ],

@@ -87,7 +87,6 @@ class _EventCardState extends State<EventCard> with SingleTickerProviderStateMix
     final onSurface = Theme.of(context).colorScheme.onSurface;
     final Color accent = eventType.accentColor;
 
-    // ── HORA EN UNA SOLA LÍNEA ──
     final timeDisplay = endTime != null ? '${_fmt(startTime)} - ${_fmt(endTime!)}' : _fmt(startTime);
     final durationLabel = endTime != null ? _duration(startTime, endTime!) : null;
 
@@ -97,7 +96,7 @@ class _EventCardState extends State<EventCard> with SingleTickerProviderStateMix
       background: Container(
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: Colors.red.shade600,
+          color: Colors.red.shade900,
           borderRadius: BorderRadius.circular(16),
         ),
         alignment: Alignment.centerRight,
@@ -146,7 +145,6 @@ class _EventCardState extends State<EventCard> with SingleTickerProviderStateMix
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // ── ICONO (Izquierda) ──
                   Container(
                     width: 48, 
                     height: 48,
@@ -158,7 +156,6 @@ class _EventCardState extends State<EventCard> with SingleTickerProviderStateMix
                   ),
                   const SizedBox(width: 16),
                   
-                  // ── TÍTULO, CHIP Y METADATOS (Centro) ──
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -181,35 +178,44 @@ class _EventCardState extends State<EventCard> with SingleTickerProviderStateMix
                           ],
                         ),
                         
-                        // ── CHIP DE DURACIÓN MOVIDO AQUÍ ──
-                        if (durationLabel != null) ...[
+                        if (durationLabel != null || metaStr.isNotEmpty) ...[
                           const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: accent.withOpacity(0.08), 
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: accent.withOpacity(0.2)),
-                            ),
-                            child: Text(
-                              durationLabel, 
-                              style: TextStyle(
-                                fontSize: 11, 
-                                color: accent, 
-                                fontWeight: FontWeight.w700
-                              )
-                            ),
-                          ),
-                        ],
-
-                        if (metaStr.isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            metaStr, 
-                            style: TextStyle(
-                              fontSize: 13, 
-                              color: onSurface.withOpacity(0.5),
-                              height: 1.3,
+                          Text.rich(
+                            TextSpan(
+                              children: [
+                                if (durationLabel != null)
+                                  WidgetSpan(
+                                    alignment: PlaceholderAlignment.middle,
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(right: 8.0),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: accent.withOpacity(0.08),
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: accent.withOpacity(0.2)),
+                                        ),
+                                        child: Text(
+                                          durationLabel,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: accent,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                if (metaStr.isNotEmpty)
+                                  TextSpan(
+                                    text: metaStr,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: onSurface.withOpacity(0.5),
+                                      height: 1.3,
+                                    ),
+                                  ),
+                              ],
                             ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
@@ -220,11 +226,10 @@ class _EventCardState extends State<EventCard> with SingleTickerProviderStateMix
                   ),
                   const SizedBox(width: 12),
 
-                  // ── HORA (Derecha del todo) ──
                   Text(
                     timeDisplay,
                     style: TextStyle(
-                      fontSize: 18, // Tamaño ajustado para que '00:00 - 00:00' quepa perfecto
+                      fontSize: 18,
                       fontWeight: FontWeight.w800, 
                       color: onSurface.withOpacity(0.85),
                       letterSpacing: -0.5, 

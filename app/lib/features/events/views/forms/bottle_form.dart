@@ -3,21 +3,47 @@ import 'package:flutter/material.dart';
 
 class BottleForm extends StatefulWidget {
   final Function(Map<String, dynamic>, DateTime) onSave;
+  final Map<String, dynamic>? initialMetadata;
+  final DateTime? initialTime;
   
-  const BottleForm({super.key, required this.onSave});
+  const BottleForm({
+    super.key, 
+    required this.onSave,
+    this.initialMetadata,
+    this.initialTime,
+  });
   
   @override
   State<BottleForm> createState() => _BottleFormState();
 }
 
 class _BottleFormState extends State<BottleForm> {
-  DateTime _time = DateTime.now();
-  final _amount = TextEditingController();
-  String _type = 'Fórmula';
-  final _notes = TextEditingController();
+  late DateTime _time;
+  late final TextEditingController _amount;
+  late String _type;
+  late final TextEditingController _notes;
+
+  @override
+  void initState() {
+    super.initState();
+    _time = widget.initialTime ?? DateTime.now();
+    final initialAmount = widget.initialMetadata?['amount_ml']?.toString() ?? '';
+    _amount = TextEditingController(text: initialAmount == '0' ? '' : initialAmount);
+    _type = widget.initialMetadata?['milk_type'] ?? 'Fórmula';
+    _notes = TextEditingController(text: widget.initialMetadata?['notes'] ?? '');
+  }
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    _notes.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final isEditing = widget.initialMetadata != null;
+
     return Column(
       children: [
         CustomTimePicker(
@@ -28,7 +54,7 @@ class _BottleFormState extends State<BottleForm> {
           segments: const [
             ButtonSegment(value: 'Fórmula', label: Text('Fórmula')),
             ButtonSegment(value: 'Materna', label: Text('Materna')),
-            ButtonSegment(value: 'Otro', label: Text('Otro')),
+            ButtonSegment(value: 'Leche', label: Text('Leche')),
           ],
           selected: {_type},
           onSelectionChanged: (set) => setState(() => _type = set.first),
@@ -65,7 +91,7 @@ class _BottleFormState extends State<BottleForm> {
                 'notes': _notes.text,
               }, _time);
             },
-            child: const Text('Guardar Toma', style: TextStyle(fontSize: 16)),
+            child: Text(isEditing ? 'Guardar cambios' : 'Guardar Toma', style: const TextStyle(fontSize: 16)),
           ),
         ),
       ],
