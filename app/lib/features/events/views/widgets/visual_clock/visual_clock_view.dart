@@ -13,6 +13,7 @@ class VisualClockView extends StatefulWidget {
   final List<SleepPrediction>? sleepPrediction;
   final SleepPrediction? wakePrediction;
   final DateTime selectedDate;
+  final bool isLearning;
 
   const VisualClockView({
     super.key,
@@ -21,6 +22,7 @@ class VisualClockView extends StatefulWidget {
     required this.selectedDate,
     this.sleepPrediction,
     this.wakePrediction,
+    this.isLearning = false,
   });
 
   @override
@@ -204,32 +206,54 @@ class _VisualClockViewState extends State<VisualClockView>
       }
     }
 
-    if (label.isEmpty) return const SizedBox.shrink();
+    if (label.isNotEmpty) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: ClockPalette.textMuted,
+              letterSpacing: 0.3,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            timeString,
+            style: const TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+              color: ClockPalette.textPrimary,
+              letterSpacing: -0.5,
+            ),
+          ),
+        ],
+      );
+    }
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: ClockPalette.textMuted,
-            letterSpacing: 0.3,
+    if (widget.isLearning) {
+      return const Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.auto_awesome, color: ClockPalette.textMuted, size: 20),
+          SizedBox(height: 6),
+          Text(
+            "BabyCare aún está aprendiendo\nlos patrones de tu bebé\npara darte predicciones.",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: ClockPalette.textMuted,
+              height: 1.3,
+            ),
           ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          timeString,
-          style: const TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.w800,
-            color: ClockPalette.textPrimary,
-            letterSpacing: -0.5,
-          ),
-        ),
-      ],
-    );
+        ],
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 
   @override

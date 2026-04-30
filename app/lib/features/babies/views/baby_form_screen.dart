@@ -1,33 +1,56 @@
+import 'package:app/features/auth/services/auth_provider.dart';
+import 'package:app/features/babies/providers/baby_provider.dart';
 import 'package:flutter/material.dart';
-import '../../../core/constants.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../api/api_service.dart';
 
-class BabyFormScreen extends StatefulWidget {
+class BabyFormScreen extends ConsumerStatefulWidget {
   const BabyFormScreen({super.key});
 
   @override
-  State<BabyFormScreen> createState() => _BabyFormScreenState();
+  ConsumerState<BabyFormScreen> createState() => _BabyFormScreenState();
 }
 
-class _BabyFormScreenState extends State<BabyFormScreen> {
+class _BabyFormScreenState extends ConsumerState<BabyFormScreen> {
   final _nameController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
 
   Future<void> _saveBaby() async {
+    final user = ref.read(currentUserProvider);
+
+    if (user == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error: No se encontró sesión activa')),
+        );
+      }
+      return;
+    }
+
     try {
       final dob = _selectedDate.toIso8601String().split('T')[0];
+      
       final newId = await ApiService.registerBaby(
         _nameController.text,
         dob,
-        AppConstants.hardcodedUserId,
+        user.id,
       );
+      
+      ref.invalidate(babyProvider);
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Bebé guardado con ID: $newId')),
+          const SnackBar(content: Text('Bebé guardado con éxito')),
         );
+        Navigator.of(context).pop();
       }
     } catch (e) {
       print(e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al guardar: $e')),
+        );
+      }
     }
   }
 

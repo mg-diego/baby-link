@@ -113,6 +113,36 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, String?>> getLastEvents(String babyId) async {
+    final url = Uri.parse('${AppConstants.apiUrl}/events/last/$babyId');
+
+    try {
+      final response = await http.get(
+        url,
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode != 200) {
+        final errorMsg = jsonDecode(response.body)['detail'] ?? 'Error desconocido';
+        throw Exception(errorMsg);
+      }
+
+      final Map<String, dynamic> data = jsonDecode(response.body);
+      
+      final Map<String, String?> safeMap = {};
+      
+      data.forEach((key, value) {
+        safeMap[key] = value?.toString();
+      });
+
+      return safeMap;
+      
+    } catch (e) {
+      print('Error en GET /events/last/$babyId: $e');
+      rethrow;
+    }
+  }
+
   static Future<Map<String, dynamic>> updateEvent(
     String eventId,
     Map<String, dynamic> updateData,
@@ -213,7 +243,7 @@ class ApiService {
       final data = jsonDecode(response.body);
       return data is List ? data : data['data'];
     }
-    
+
     return [];
   }
 
@@ -227,7 +257,7 @@ class ApiService {
       final jsonResponse = jsonDecode(response.body);
       return jsonResponse['data'];
     }
-    
+
     return null;
   }
 
@@ -239,18 +269,21 @@ class ApiService {
     String subcategory = 'Todo',
   }) async {
     // Formateamos las fechas a YYYY-MM-DD para FastAPI
-    final startStr = '${startDate.year}-${startDate.month.toString().padLeft(2, '0')}-${startDate.day.toString().padLeft(2, '0')}';
-    final endStr = '${endDate.year}-${endDate.month.toString().padLeft(2, '0')}-${endDate.day.toString().padLeft(2, '0')}';
+    final startStr =
+        '${startDate.year}-${startDate.month.toString().padLeft(2, '0')}-${startDate.day.toString().padLeft(2, '0')}';
+    final endStr =
+        '${endDate.year}-${endDate.month.toString().padLeft(2, '0')}-${endDate.day.toString().padLeft(2, '0')}';
 
     // Usamos .replace para añadir los query parameters de forma segura
-    final uri = Uri.parse('${AppConstants.apiUrl}/analytics/$babyId/stats').replace(
-      queryParameters: {
-        'start_date': startStr,
-        'end_date': endStr,
-        'category': category,
-        'subcategory': subcategory,
-      },
-    );
+    final uri = Uri.parse('${AppConstants.apiUrl}/analytics/$babyId/stats')
+        .replace(
+          queryParameters: {
+            'start_date': startStr,
+            'end_date': endStr,
+            'category': category,
+            'subcategory': subcategory,
+          },
+        );
 
     try {
       final response = await http.get(
@@ -262,7 +295,7 @@ class ApiService {
         final jsonResponse = jsonDecode(response.body);
         return jsonResponse['data'];
       }
-      
+
       return null;
     } catch (e) {
       return null;

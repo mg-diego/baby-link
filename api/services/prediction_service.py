@@ -11,6 +11,26 @@ class PredictionService:
         clean_str = time_str.split('+')[0].replace('Z', '')
         return datetime.fromisoformat(clean_str)
 
+    def _check_data_sufficiency(self, events):
+        if not events or len(events) < 20:
+            return {
+                "status": "insufficient_events",
+                "prediction": None,
+                "required": 20,
+                "current": len(events) if events else 0
+            }
+        
+        unique_days = len(set(self._parse_utc(ev['start_time']).date() for ev in events if self._parse_utc(ev['start_time'])))
+        
+        if unique_days < 7:
+            return {
+                "status": "insufficient_days",
+                "prediction": None,
+                "required": 7,
+                "current": unique_days
+            }
+        return None
+
     def _get_max_naps(self, dob_str):
         dob = self._parse_utc(dob_str)
         age_days = (datetime.utcnow() - dob).days
@@ -26,8 +46,9 @@ class PredictionService:
         events = self.repository.get_recent_events(baby_id)
         baby_info = self.repository.get_baby_info(baby_id)
         
-        if not events:
-            return {"error": "No hay datos suficientes para calcular"}
+        sufficiency_check = self._check_data_sufficiency(events)
+        if sufficiency_check:
+            return sufficiency_check
 
         morning_ww, evening_ww, day_ww, nap_lengths, wake_hours = [], [], [], [], []
         feed_anchors = []
@@ -107,8 +128,9 @@ class PredictionService:
     def calculate_wake_prediction(self, baby_id: str):
         events = self.repository.get_recent_events(baby_id)
         
-        if not events:
-            return None
+        sufficiency_check = self._check_data_sufficiency(events)
+        if sufficiency_check:
+            return sufficiency_check
 
         night_durations = []
         wake_hours = []
@@ -154,7 +176,7 @@ class PredictionService:
 
         if not active_bedtime:
             schedule = self.calculate_schedule(baby_id)
-            if isinstance(schedule, dict) and "error" in schedule:
+            if isinstance(schedule, dict) and ("error" in schedule or "status" in schedule):
                 return None
             for item in schedule:
                 if item.get("type") == "bedtime":

@@ -6,6 +6,7 @@ import 'package:app/features/events/views/forms/bed_time_form.dart';
 import 'package:app/features/events/views/forms/bottle_form.dart';
 import 'package:app/features/events/views/forms/diaper_form.dart';
 import 'package:app/features/events/views/forms/duration_edit_form.dart';
+import 'package:app/features/events/views/forms/growth_form.dart';
 import 'package:app/features/events/views/forms/nursing_form.dart';
 import 'package:app/features/events/views/forms/placeholder_form.dart';
 import 'package:app/features/events/views/forms/solids_form.dart';
@@ -96,12 +97,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     ref.invalidate(
       dailySummaryProvider((babyId: widget.babyId, date: selectedDate)),
     );
-    ref.invalidate(
-      sleepPredictionProvider(widget.babyId),
-    );
-    ref.invalidate(
-      wakePredictionProvider(widget.babyId),
-    );
+    ref.invalidate(sleepPredictionProvider(widget.babyId));
+    ref.invalidate(wakePredictionProvider(widget.babyId));
   }
 
   Future<void> _handleDelete(Map<String, dynamic> event) async {
@@ -289,6 +286,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   initialMetadata: metadata,
                   onSave: processUpdate,
                 )
+              else if (eventType == EventType.growth)
+                GrowthForm(
+                  initialTime: startTime,
+                  initialMetadata: metadata,
+                  onSave: processUpdate,
+                )
               else
                 PlaceholderForm(
                   title: eventType.uiLabel,
@@ -315,8 +318,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     final eventsAsync = ref.watch(dailyEventsProvider(args));
     final eventsYdayAsync = ref.watch(dailyEventsProvider(argsYday));
-    final sleepPredictionAsync = ref.watch(sleepPredictionProvider(widget.babyId));
-    final wakePredictionAsync = ref.watch(wakePredictionProvider(widget.babyId));
+    final sleepPredictionAsync = ref.watch(
+      sleepPredictionProvider(widget.babyId),
+    );
+    final wakePredictionAsync = ref.watch(
+      wakePredictionProvider(widget.babyId),
+    );
 
     // Obtenemos los datos del bebé desde el provider
     final babyAsync = ref.watch(babyProvider);
@@ -449,6 +456,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 final sleepPrediction = sleepPredictionAsync.asData?.value;
                 final wakePrediction = wakePredictionAsync.asData?.value;
 
+                final isLearning = sleepPrediction == null;
+
                 if (_viewMode == 0) {
                   return VisualClockView(
                     key: ValueKey('clock_${events.hashCode}'),
@@ -459,6 +468,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     selectedDate: selectedDate,
                     sleepPrediction: sleepPrediction,
                     wakePrediction: wakePrediction,
+                    isLearning: isLearning,
                   );
                 }
 

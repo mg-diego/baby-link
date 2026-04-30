@@ -85,6 +85,13 @@ def get_valid_event_dates(baby_id: str, service: EventService = Depends(get_even
         return {"status": "success", "dates": dates}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("/events/last/{baby_id}", tags=["Events"])
+async def get_last_events_by_category(baby_id: str, service: EventService = Depends(get_event_service)):
+    try:
+        return service.get_last_events_by_category(baby_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.patch("/events/{event_id}", tags=["Events"])
 def update_event(event_id: str, update_data: EventUpdate, service: EventService = Depends(get_event_service)):

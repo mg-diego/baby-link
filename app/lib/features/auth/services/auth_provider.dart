@@ -8,10 +8,17 @@ final authStateProvider = StreamProvider<AuthState>((ref) {
 });
 
 final currentUserProvider = Provider<User?>((ref) {
-  return ref.watch(supabaseClientProvider).auth.currentUser;
+  final authStateAsync = ref.watch(authStateProvider);
+
+  return authStateAsync.when(
+    data: (authState) => authState.session?.user,
+    loading: () => null,
+    error: (error, stackTrace) => null,
+  );
 });
 
 final authServiceProvider = Provider((ref) => AuthService(ref.watch(supabaseClientProvider)));
+
 
 class AuthService {
   final SupabaseClient _supabase;

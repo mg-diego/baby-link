@@ -96,3 +96,12 @@ class EventRepository:
             .execute()
         return response.data
     
+    def get_recent_events(self, baby_id: str):
+        response = self.db.table('baby_events') \
+            .select('category, start_time, metadata') \
+            .eq('baby_id', baby_id) \
+            .order('start_time', desc=True) \
+            .limit(1000) \
+            .execute()
+        return response.data
+    

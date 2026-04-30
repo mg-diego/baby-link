@@ -21,7 +21,6 @@ class ProfileScreen extends ConsumerWidget {
         padding: const EdgeInsets.all(20.0),
         child: Column(
           children: [
-            // Sección de Usuario
             const SizedBox(height: 20),
             CircleAvatar(
               radius: 50,
@@ -42,7 +41,6 @@ class ProfileScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 40),
 
-            // Sección de Información del Bebé
             _buildSectionTitle(context, 'Mi Bebé'),
             babyAsync.when(
               data: (baby) => baby != null
@@ -58,7 +56,6 @@ class ProfileScreen extends ConsumerWidget {
                       subtitle: 'Configura los datos de tu bebé',
                       icon: Icons.add_circle_outline,
                       onTap: () {
-                        // Navegar a BabyFormScreen si fuera necesario
                       },
                     ),
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -68,7 +65,6 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 30),
             _buildSectionTitle(context, 'Cuenta'),
             
-            // Botón de Cerrar Sesión
             _buildInfoCard(
               context,
               title: 'Cerrar Sesión',
@@ -79,7 +75,9 @@ class ProfileScreen extends ConsumerWidget {
                 final confirm = await _showLogoutDialog(context);
                 if (confirm == true) {
                   await authService.signOut();
-                  // El AuthWrapper en main.dart detectará el cambio y mostrará el Login
+                  if (context.mounted) {
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                  }
                 }
               },
             ),

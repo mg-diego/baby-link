@@ -1,11 +1,33 @@
 import 'package:app/features/auth/widgets/auth_wrapper.dart';
+import 'package:app/features/widgets/widget_config_screen.dart';
+import 'package:app/features/widgets/widget_handler.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  if (!kIsWeb) {
+    try {
+      const platform = MethodChannel('widget_config');
+      final widgetId = await platform.invokeMethod<int>('getWidgetId');
+
+      if (widgetId != null && widgetId != 0) {
+        runApp(
+          MaterialApp(
+            home: WidgetConfigScreen(widgetId: widgetId),
+            debugShowCheckedModeBanner: false,
+          ),
+        );
+        return;
+      }
+    } catch (_) {}
+  }
 
   await dotenv.load(fileName: ".env");
 
@@ -14,6 +36,11 @@ void main() async {
     anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
 
+  if (!kIsWeb) {
+    try {
+      await HomeWidget.registerInteractivityCallback(backgroundCallback);
+    } catch (_) {}
+  }
   runApp(const ProviderScope(child: BabyLinkApp()));
 }
 

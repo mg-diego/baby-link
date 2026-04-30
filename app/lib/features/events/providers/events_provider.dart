@@ -163,3 +163,7 @@ final wakePredictionProvider =
       if (rawData == null) return null;
       return SleepPrediction.fromJson(rawData);
     });
+
+final lastEventsProvider = FutureProvider.family<Map<String, String?>, String>((ref, babyId) async {
+  return await ApiService.getLastEvents(babyId);
+});

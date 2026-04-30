@@ -13,7 +13,7 @@ enum EventType {
     Color(0xFF8F95FF), // lavender
   ),
   bedtime(
-    'Hora de acostarse', 'bed_time', 'sleep',
+    'Hora de dormir', 'bed_time', 'sleep',
     Icons.nightlight_round, null,
     Color(0xFFF9AC87), // indigo
   ),
@@ -71,7 +71,7 @@ enum EventType {
   growth(
     'Crecimiento', 'growth', 'health',
     Icons.show_chart, null,
-    Color(0xFF80CBC4), // teal
+    Color.fromARGB(255, 60, 65, 160),
   ),
   milestone(
     'Hito', 'milestone', 'health',

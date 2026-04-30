@@ -1,3 +1,4 @@
+from typing import Dict, Optional
 from fastapi import HTTPException
 from repositories.event_repository import EventRepository
 from models.event_models import EventBase, EventCategory, EventUpdate
@@ -53,6 +54,36 @@ class EventService:
             return sorted(list(unique_dates))
 
         return []
+    
+    def get_last_events_by_category(self, baby_id: str) -> Dict[str, Optional[str]]:
+        events_data = self.repository.get_recent_events(baby_id)
+        
+        last_events = {}
+        for event in events_data:
+            category = event['category']
+            start_time = event['start_time']
+            metadata = event.get('metadata') or {}
+            
+            if category == 'feed':
+                feed_type = metadata.get('type')
+                if feed_type in ['solids', 'bottle', 'breast']:
+                    if feed_type not in last_events:
+                        last_events[feed_type] = start_time
+                elif 'feed' not in last_events:
+                    last_events['feed'] = start_time
+            elif category == 'diaper':
+                condition = metadata.get('condition')
+                if condition in ['wet', 'dirty']:
+                    key = f"diaper_{condition}"
+                    if key not in last_events:
+                        last_events[key] = start_time
+                if 'diaper' not in last_events:
+                    last_events['diaper'] = start_time
+            else:
+                if category not in last_events:
+                    last_events[category] = start_time
+                    
+        return last_events
 
     # --- Validadores de Estructura ---
 

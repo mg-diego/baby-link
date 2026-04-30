@@ -1,4 +1,5 @@
 import 'package:app/core/widgets/custom_top_bar.dart';
+import 'package:app/features/events/views/forms/growth_form.dart';
 import 'package:app/features/events/views/forms/nursing_form.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,7 +17,6 @@ import 'forms/bed_time_form.dart';
 import 'forms/basic_notes_form.dart';
 
 import '../utils/duration_event_handler.dart';
-import 'widgets/event_grid_button.dart';
 import '../../analytics/providers/daily_summary_provider.dart';
 import '../../events/providers/events_provider.dart';
 
@@ -121,6 +121,7 @@ class EventLoggerScreen extends ConsumerWidget {
     final currentDate = ref.read(selectedDateProvider);
     ref.invalidate(dailyEventsProvider((babyId: babyId, date: currentDate)));
     ref.invalidate(dailySummaryProvider((babyId: babyId, date: currentDate)));
+    ref.invalidate(lastEventsProvider(babyId));
   }
 
   void _showEventForm(BuildContext context, WidgetRef ref, EventType eventType) {
@@ -207,6 +208,8 @@ class EventLoggerScreen extends ConsumerWidget {
                 TemperatureForm(onSave: (meta, time) => _closeAndLog(ctx, context, ref, eventType, meta, time))
               else if (eventType == EventType.medicine || eventType == EventType.bath)
                 BasicNotesForm(onSave: (meta, time) => _closeAndLog(ctx, context, ref, eventType, meta, time))
+              else if (eventType == EventType.growth)
+                GrowthForm(onSave: (meta, time) => _closeAndLog(ctx, context, ref, eventType, meta, time))
               else
                 PlaceholderForm(
                   title: eventType.uiLabel,
@@ -225,12 +228,39 @@ class EventLoggerScreen extends ConsumerWidget {
     _logEvent(context, ref, type.backendCategory, meta, time);
   }
 
+  bool _showsTimePlaceholder(EventType type) {
+    return type == EventType.wokeUp ||
+           type == EventType.nap ||
+           type == EventType.bedtime ||
+           type == EventType.bottle ||
+           type == EventType.nursing ||
+           type == EventType.solids ||
+           type == EventType.bath ||
+           type == EventType.nightWaking ||
+           type == EventType.diaper;
+  }
+
+  String _formatTime(String? isoString, {bool short = false}) {
+    if (isoString == null) return '--';
+    final date = DateTime.tryParse(isoString)?.toLocal();
+    if (date == null) return '--';
+    final diff = DateTime.now().difference(date);
+    if (diff.inDays > 0) return '${diff.inDays}d';
+    if (diff.inHours > 0) {
+      final mins = diff.inMinutes.remainder(60);
+      return (mins > 0 && !short) ? '${diff.inHours}h ${mins}m' : '${diff.inHours}h';
+    }
+    if (diff.inMinutes > 0) return '${diff.inMinutes}m';
+    return 'Ahora';
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final activeNap = ref.watch(activeNapProvider);
     final activeNightWaking = ref.watch(activeNightWakingProvider);
     final activeNursing = ref.watch(activeBreastfeedingProvider);
     final activePumping = ref.watch(activePumpingProvider);
+    final lastEventsAsync = ref.watch(lastEventsProvider(babyId));
 
     bool isEventActive(EventType type) {
       if (type == EventType.nap) return activeNap != null;
@@ -295,7 +325,8 @@ class EventLoggerScreen extends ConsumerWidget {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.surface,
                     borderRadius: BorderRadius.circular(24),
@@ -307,24 +338,155 @@ class EventLoggerScreen extends ConsumerWidget {
                       ),
                     ],
                   ),
-                  child: GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      childAspectRatio: 2.6,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: events.map((eventType) {
+                        final isActive = isEventActive(eventType);
+                        final showTime = _showsTimePlaceholder(eventType);
+
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 12),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () => _showEventForm(context, ref, eventType),
+                              borderRadius: BorderRadius.circular(16),
+                              child: Container(
+                                width: 105,
+                                height: 130,
+                                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+                                decoration: BoxDecoration(
+                                  color: isActive 
+                                      ? eventType.accentColor.withOpacity(0.1) 
+                                      : Theme.of(context).colorScheme.surface,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: isActive 
+                                        ? eventType.accentColor 
+                                        : Theme.of(context).colorScheme.outlineVariant.withOpacity(0.5),
+                                    width: isActive ? 2 : 1,
+                                  ),
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.start,
+                                  children: [
+                                    Icon(
+                                      eventType.icon, 
+                                      color: eventType.accentColor, 
+                                      size: 28,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Expanded(
+                                      child: Container(
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          eventType.uiLabel,
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(
+                                            fontSize: 12, 
+                                            fontWeight: FontWeight.w600, 
+                                            height: 1.15,
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    SizedBox(
+                                      height: 16,
+                                      child: showTime 
+                                          ? lastEventsAsync.when(
+                                              data: (eventsMap) {
+                                                if (eventType == EventType.diaper) {
+                                                  final wetTime = _formatTime(eventsMap['diaper_wet'], short: true);
+                                                  final dirtyTime = _formatTime(eventsMap['diaper_dirty'], short: true);
+
+                                                  return Row(
+                                                    mainAxisAlignment: MainAxisAlignment.center,
+                                                    children: [
+                                                      Container(
+                                                        width: 6,
+                                                        height: 6,
+                                                        decoration: BoxDecoration(
+                                                          color: const Color.fromARGB(255, 233, 224, 54),
+                                                          shape: BoxShape.circle,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 4),
+                                                      Text(
+                                                        wetTime,
+                                                        style: TextStyle(
+                                                          fontSize: 11,
+                                                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                                                          fontWeight: FontWeight.w500,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                      Container(
+                                                        width: 6,
+                                                        height: 6,
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.brown.shade400,
+                                                          shape: BoxShape.circle,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 4),
+                                                      Text(
+                                                        dirtyTime,
+                                                        style: TextStyle(
+                                                          fontSize: 11,
+                                                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                                                          fontWeight: FontWeight.w500,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  );
+                                                }
+
+                                                final key = eventType == EventType.bottle ? 'bottle' 
+                                                          : eventType == EventType.nursing ? 'breast' 
+                                                          : eventType == EventType.solids ? 'solids' 
+                                                          : eventType.backendCategory;
+                                                
+                                                return Text(
+                                                  _formatTime(eventsMap[key]),
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                );
+                                              },
+                                              loading: () => const Center(
+                                                child: SizedBox(
+                                                  height: 12,
+                                                  width: 12,
+                                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                                ),
+                                              ),
+                                              error: (_, __) => Text(
+                                                '--',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            )
+                                          : const SizedBox.shrink(),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
                     ),
-                    itemCount: events.length,
-                    itemBuilder: (context, index) {
-                      final eventType = events[index];
-                      return EventGridButton(
-                        eventType: eventType,
-                        isActive: isEventActive(eventType),
-                        onTap: () => _showEventForm(context, ref, eventType),
-                      );
-                    },
                   ),
                 ),
               ],
