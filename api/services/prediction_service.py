@@ -64,7 +64,10 @@ class PredictionService:
 
         for ev in events:
             start = self._parse_utc(ev['start_time'])
-            end = self._parse_utc(ev['end_time'])
+            end_time_str = ev.get('end_time')
+            if not end_time_str:
+                continue
+            end = self._parse_utc(ev.get('end_time'))
             cat = ev['category']
 
             if cat == 'woke_up':
