@@ -50,24 +50,18 @@ class PredictionService:
         if sufficiency_check:
             return sufficiency_check
 
+        events_asc = sorted(events, key=lambda x: x['start_time'])
+
         morning_ww, evening_ww, day_ww, nap_lengths, wake_hours = [], [], [], [], []
         feed_anchors = []
         
-        now_utc = datetime.utcnow()
-        cutoff_today = now_utc - timedelta(hours=16) 
-        morning_wake_today = None
-        last_wake_time = None
-        naps_taken_today = 0
-
         last_wake = None
         is_first_nap_of_day = False
 
-        for ev in events:
+        for ev in events_asc:
             start = self._parse_utc(ev['start_time'])
             end_time_str = ev.get('end_time')
-            if not end_time_str:
-                continue
-            end = self._parse_utc(ev.get('end_time'))
+            end = self._parse_utc(end_time_str) if end_time_str else None
             cat = ev['category']
 
             if cat == 'woke_up':
@@ -81,21 +75,14 @@ class PredictionService:
                 if end:
                     nap_lengths.append((end - start).total_seconds() / 60)
                     last_wake, is_first_nap_of_day = end, False
+                else:
+                    last_wake = None
             elif cat == 'bedtime' and last_wake:
                 ww = (start - last_wake).total_seconds() / 60
                 if 60 < ww < 480: evening_ww.append(ww)
                 last_wake = None
             elif cat == 'bottle' or cat == 'nursing':
                 feed_anchors.append(start.hour + start.minute/60)
-
-            if start > cutoff_today:
-                if cat == 'woke_up':
-                    morning_wake_today = start
-                    last_wake_time = start
-                    naps_taken_today = 0 
-                elif cat == 'nap' and end:
-                    last_wake_time = end
-                    naps_taken_today += 1
 
         max_naps_allowed = self._get_max_naps(baby_info['dob'])
 
@@ -126,6 +113,31 @@ class PredictionService:
             "feed_anchors": sorted(feed_anchors)
         }
 
+        now_utc = datetime.utcnow()
+        cutoff_today = now_utc - timedelta(hours=16) 
+        morning_wake_today = None
+        last_wake_time = None
+        naps_taken_today = 0
+
+        for ev in events_asc:
+            start = self._parse_utc(ev['start_time'])
+            if start < cutoff_today:
+                continue
+                
+            cat = ev['category']
+            if cat == 'woke_up':
+                morning_wake_today = start
+                last_wake_time = start
+                naps_taken_today = 0
+            elif cat == 'nap':
+                end_time_str = ev.get('end_time')
+                end = self._parse_utc(end_time_str) if end_time_str else None
+                if end:
+                    last_wake_time = end
+                else:
+                    last_wake_time = start + timedelta(minutes=profile['nap_base'])
+                naps_taken_today += 1
+
         return self._generate_timeline(profile, morning_wake_today, last_wake_time, naps_taken_today)
     
     def calculate_wake_prediction(self, baby_id: str):
@@ -135,11 +147,13 @@ class PredictionService:
         if sufficiency_check:
             return sufficiency_check
 
+        events_asc = sorted(events, key=lambda x: x['start_time'])
+
         night_durations = []
         wake_hours = []
         last_bedtime_hist = None
 
-        for ev in events:
+        for ev in events_asc:
             start = self._parse_utc(ev['start_time'])
             cat = ev['category']
 
@@ -167,7 +181,7 @@ class PredictionService:
         cutoff_today = now_utc - timedelta(hours=16)
         active_bedtime = None
 
-        for ev in reversed(events):
+        for ev in reversed(events_asc):
             start = self._parse_utc(ev['start_time'])
             if start < cutoff_today:
                 break

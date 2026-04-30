@@ -67,18 +67,11 @@ class _VisualClockViewState extends State<VisualClockView>
 
   List<SleepPrediction> _getNapPredictions() {
     final preds = widget.sleepPrediction?.where((p) => p.isNap && p.end != null).toList() ?? [];
-    final realNaps = widget.events.where((e) => e['category'] == 'nap').toList();
+    final realNapsCount = widget.events.where((e) => e['category'] == 'nap').length;
 
     return preds.where((p) {
-      for (var realNap in realNaps) {
-        final realStart = DateTime.parse(realNap['start_time']).toLocal();
-        final realEnd = realNap['end_time'] != null
-            ? DateTime.parse(realNap['end_time']).toLocal()
-            : DateTime.now();
-
-        if (realStart.isBefore(p.end!) && p.start.isBefore(realEnd)) {
-          return false;
-        }
+      if (p.index != null) {
+        return p.index! > realNapsCount;
       }
       return true;
     }).toList();
