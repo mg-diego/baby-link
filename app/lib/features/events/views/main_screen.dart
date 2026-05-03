@@ -1,14 +1,12 @@
 import 'package:app/api/api_service.dart';
-import 'package:app/core/widgets/global_event_controller.dart';
 import 'package:app/features/analytics/views/stats_screen.dart';
 import 'package:app/features/events/providers/events_provider.dart';
-import 'package:app/features/profile/screens/profile_screen.dart';
+import 'package:app/features/events/views/event_logger_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'home_screen.dart';
-import 'event_logger_screen.dart';
 
 const Color inActiveIconColor = Color(0xFFB6B6B6);
 
@@ -55,41 +53,36 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   int currentSelectedIndex = 0;
 
   void updateCurrentIndex(int index) {
+    if (index == 1) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => EventLoggerSheet(babyId: widget.baby["id"].toString()),
+      );
+      return;
+    }
     setState(() {
       currentSelectedIndex = index;
     });
   }
 
+  Widget _buildBody(String babyId) {
+    if (currentSelectedIndex == 0) return HomeScreen(babyId: babyId);
+    if (currentSelectedIndex == 2) return StatsScreen(babyId: babyId);
+    return HomeScreen(babyId: babyId);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final activeEventsMap = ref.watch(allActiveEventsProvider);
     final String babyId = widget.baby["id"].toString();
-
-    final pages = [
-      HomeScreen(babyId: babyId),
-      EventLoggerScreen(babyId: babyId),
-      StatsScreen(babyId: babyId)
-    ];
 
     return Scaffold(
       body: Column(
         children: [
           Expanded(
-            child: pages[currentSelectedIndex],
+            child: _buildBody(babyId),
           ),
-          
-          if (activeEventsMap.isNotEmpty)
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: activeEventsMap.entries.map((entry) {
-                return GlobalEventController(
-                  key: ValueKey(entry.key),
-                  babyId: babyId,
-                  activeCategory: entry.key,
-                  activeEvent: entry.value,
-                );
-              }).toList(),
-            ),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -97,7 +90,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
         currentIndex: currentSelectedIndex,
         showSelectedLabels: true,
         showUnselectedLabels: true,
-        selectedItemColor:  const Color(0xFFFF7643),
+        selectedItemColor: const Color(0xFFFF7643),
         unselectedItemColor: inActiveIconColor,
         type: BottomNavigationBarType.fixed,
         items: [
@@ -139,8 +132,6 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     );
   }
 }
-
-// --- SVGs DEL TEMPLATE ---
 
 const homeIcon =
     '''<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <path fill-rule="evenodd" clip-rule="evenodd" d="M21.4498 10.275L11.9998 3.1875L2.5498 10.275L2.9998 11.625H3.7498V20.25H20.2498V11.625H20.9998L21.4498 10.275ZM5.2498 18.75V10.125L11.9998 5.0625L18.7498 10.125V18.75H14.9999V14.3333L14.2499 13.5833H9.74988L8.99988 14.3333V18.75H5.2498ZM10.4999 18.75H13.4999V15.0833H10.4999V18.75Z" fill="#080341"></path> </g></svg>''';

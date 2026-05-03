@@ -161,7 +161,7 @@ class DurationEventHandler {
                     padding: const EdgeInsets.symmetric(vertical: 16.0),
                     child: Container(
                       padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: eventType.accentColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                      decoration: BoxDecoration(color: eventType.getAccentColor(context).withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -171,11 +171,11 @@ class DurationEventHandler {
                               Text('Inicio: ${_formatTimeOnly(activeEvent.startTime)}', style: const TextStyle(fontWeight: FontWeight.w600)),
                               const SizedBox(height: 4),
                               Text('Duración: ${_formatDuration(duration)}', 
-                                style: TextStyle(color: isValid ? eventType.accentColor : Colors.red, fontWeight: FontWeight.bold)
+                                style: TextStyle(color: isValid ? eventType.getAccentColor(context) : Colors.red, fontWeight: FontWeight.bold)
                               ),
                             ],
                           ),
-                          Icon(eventType.icon, color: eventType.accentColor),
+                          Icon(eventType.icon, color: eventType.getAccentColor(context)),
                         ],
                       ),
                     ),

@@ -85,7 +85,7 @@ class _EventCardState extends State<EventCard> with SingleTickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     final onSurface = Theme.of(context).colorScheme.onSurface;
-    final Color accent = eventType.accentColor;
+    final Color accent = eventType.getAccentColor(context);
 
     final timeDisplay = endTime != null ? '${_fmt(startTime)} - ${_fmt(endTime!)}' : _fmt(startTime);
     final durationLabel = endTime != null ? _duration(startTime, endTime!) : null;
@@ -123,7 +123,7 @@ class _EventCardState extends State<EventCard> with SingleTickerProviderStateMix
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: isOngoing ? accent.withOpacity(0.08) : eventType.backgroundColor,
+          color: isOngoing ? accent.withOpacity(0.08) : eventType.getBackgroundColor(context),
           borderRadius: BorderRadius.circular(16),
           border: Border(left: BorderSide(color: accent, width: 5)),
           boxShadow: [

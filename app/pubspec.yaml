@@ -17,6 +17,8 @@ dependencies:
   http: ^1.6.0
   supabase_flutter: ^2.12.4
   home_widget: ^0.9.1
+  intl: ^0.20.2
+  material_design_icons_flutter: ^7.0.0
 
 dev_dependencies:
   flutter_test:

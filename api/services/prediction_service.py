@@ -114,7 +114,7 @@ class PredictionService:
         }
 
         now_utc = datetime.utcnow()
-        cutoff_today = now_utc - timedelta(hours=16) 
+        cutoff_today = now_utc - timedelta(hours=22)
         morning_wake_today = None
         last_wake_time = None
         naps_taken_today = 0
@@ -178,7 +178,7 @@ class PredictionService:
         avg_wake_hour = np.mean(wake_hours) if wake_hours else 7.5
 
         now_utc = datetime.utcnow()
-        cutoff_today = now_utc - timedelta(hours=16)
+        cutoff_today = now_utc - timedelta(hours=22)
         active_bedtime = None
 
         for ev in reversed(events_asc):
@@ -222,6 +222,12 @@ class PredictionService:
             final_wake = target_wake + timedelta(minutes=45)
         if final_wake < target_wake - timedelta(minutes=45):
             final_wake = target_wake - timedelta(minutes=45)
+
+        diff_from_now = (final_wake - now_utc).total_seconds() / 3600
+        if diff_from_now > 18:
+            final_wake -= timedelta(days=1)
+        elif diff_from_now < -12:
+            final_wake += timedelta(days=1)
 
         return {
             "type": "woke_up",

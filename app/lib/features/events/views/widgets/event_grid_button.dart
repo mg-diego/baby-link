@@ -15,7 +15,7 @@ class EventGridButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color accent = eventType.accentColor;
+    final Color accent = eventType.getAccentColor(context);
     final Color activeAccent = Colors.red.shade400;
 
     final Color bgColor = isActive ? activeAccent.withOpacity(0.08) : accent.withOpacity(0.08);

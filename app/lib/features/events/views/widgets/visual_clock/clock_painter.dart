@@ -1,10 +1,11 @@
 import 'dart:math' as math;
 import 'package:app/core/models/event_type.dart';
 import 'package:flutter/material.dart';
-import 'package:app/features/events/providers/events_provider.dart'; // Para SleepPrediction
+import 'package:app/features/events/providers/events_provider.dart';
 import 'clock_palette.dart';
 
 class ClockPainter extends CustomPainter {
+  final BuildContext context;
   final List<Map<String, dynamic>> events;
   final DateTime startTime;
   final DateTime endTime;
@@ -13,8 +14,10 @@ class ClockPainter extends CustomPainter {
   final double sweepAngle;
   final bool isDayMode;
   final List<SleepPrediction> napPredictions;
+  final double? currentProgress;
 
   ClockPainter({
+    required this.context,
     required this.events,
     required this.startTime,
     required this.endTime,
@@ -23,9 +26,10 @@ class ClockPainter extends CustomPainter {
     required this.sweepAngle,
     required this.isDayMode,
     required this.napPredictions,
+    required this.currentProgress,
   });
 
-  static const double _strokeW = 30.0;
+  static const double _strokeW = 25.0;
 
   void _drawDashedArc(
     Canvas canvas,
@@ -42,11 +46,17 @@ class ClockPainter extends CustomPainter {
     }
   }
 
-  @override
+@override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.width / 2;
     final rect = Rect.fromCircle(center: center, radius: radius);
+
+    final bool isBiological = currentProgress != null;
+
+    final Color trackColor = isBiological
+        ? (isDayMode ? const Color(0xFFE8EAF6) : const Color(0xFF242746))
+        : ClockPalette.trackBg;
 
     // 1. TRACK INACTIVO
     canvas.drawArc(
@@ -55,37 +65,96 @@ class ClockPainter extends CustomPainter {
       sweepAngle,
       false,
       Paint()
-        ..color = ClockPalette.trackBg
+        ..color = trackColor.withValues(alpha: 0.45)
         ..style = PaintingStyle.stroke
         ..strokeWidth = _strokeW
         ..strokeCap = StrokeCap.round,
     );
 
-    // 2. ARCO PRINCIPAL
+    final double activeSweep = isBiological 
+        ? sweepAngle * currentProgress!.clamp(0.0, 1.0) 
+        : sweepAngle;
+        
+    final Color activeColor = isBiological
+        ? (isDayMode ? const Color(0xFFFFA726) : const Color(0xFF5C6BC0))
+        : (isDayMode ? ClockPalette.dayAccent : ClockPalette.nightAccent);
+
+    // 2. ARCO PRINCIPAL (ACTIVO)
     canvas.drawArc(
       rect,
       startAngle,
-      sweepAngle,
+      activeSweep,
       false,
       Paint()
-        ..color = isDayMode ? ClockPalette.dayAccent : ClockPalette.nightAccent
+        ..color = activeColor.withValues(alpha: 0.3)
         ..style = PaintingStyle.stroke
         ..strokeWidth = _strokeW
         ..strokeCap = StrokeCap.round,
     );
 
+    // --- NUEVO: INDICADOR DE MEDIANOCHE ---
+    // Calculamos si hay una transición de día entre startTime y endTime
+    final DateTime nextMidnight = DateTime(startTime.year, startTime.month, startTime.day + 1);
+    
+    if (nextMidnight.isAfter(startTime) && nextMidnight.isBefore(endTime)) {
+      final sf = nextMidnight.difference(startTime).inMinutes / totalMinutes;
+      final midnightAngle = startAngle + (sf * sweepAngle);
+
+      // Dibujamos una línea sutil cruzando el ancho del track
+      final innerR = radius - _strokeW / 2 + 2;
+      final outerR = radius + _strokeW / 2 - 2;
+
+      final p1 = Offset(center.dx + innerR * math.cos(midnightAngle), center.dy + innerR * math.sin(midnightAngle));
+      final p2 = Offset(center.dx + outerR * math.cos(midnightAngle), center.dy + outerR * math.sin(midnightAngle));
+
+      canvas.drawLine(
+        p1,
+        p2,
+        Paint()
+          ..color = isDayMode ? Colors.black26 : Colors.white30
+          ..strokeWidth = 2.5
+          ..strokeCap = StrokeCap.round,
+      );
+
+      final textR = radius + _strokeW / 2 + 12;
+      final tx = center.dx + textR * math.cos(midnightAngle);
+      final ty = center.dy + textR * math.sin(midnightAngle);
+
+      final tp = TextPainter(
+        text: TextSpan(
+          text: 'Medianoche',
+          style: TextStyle(
+            color: isDayMode ? Colors.black38 : Colors.white54,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+
+      tp.paint(canvas, Offset(tx - tp.width / 2, ty - tp.height / 2));
+    }
+    // --- FIN INDICADOR DE MEDIANOCHE ---
+
+    // 3. SEGMENTOS DE DURACIÓN (Desvelos / Siestas reales)
     // 3. SEGMENTOS DE DURACIÓN
     for (var event in events) {
       final cat = event['category'];
       final eventType = EventType.fromBackend(cat, event['metadata'] ?? {});
 
-      final bool isRelevant =
-          (isDayMode && cat == 'nap' && event['end_time'] != null) ||
-          (!isDayMode && cat == 'night_waking' && event['end_time'] != null);
+      // SOLO dibujamos el arco si es siesta de día o desvelo de noche
+      final bool isRelevant = (isDayMode && cat == 'nap') || 
+                              (!isDayMode && cat == 'night_waking');
+      
       if (!isRelevant) continue;
 
       final evStart = DateTime.parse(event['start_time']).toLocal();
-      final evEnd = DateTime.parse(event['end_time']).toLocal();
+      
+      // Si el evento está en curso (end_time nulo), el recorrido llega hasta ahora
+      final evEnd = event['end_time'] != null
+          ? DateTime.parse(event['end_time']).toLocal()
+          : DateTime.now();
 
       if (!evStart.isBefore(endTime) || !evEnd.isAfter(startTime)) continue;
 
@@ -101,14 +170,14 @@ class ClockPainter extends CustomPainter {
         (ef - sf) * sweepAngle,
         false,
         Paint()
-          ..color = eventType.accentColor.withOpacity(0.8)
+          ..color = eventType.getAccentColor(context, forceNightMode: !isDayMode).withValues(alpha: 0.8)
           ..style = PaintingStyle.stroke
           ..strokeWidth = _strokeW * 1.25
           ..strokeCap = StrokeCap.round,
       );
     }
 
-    // 4. SIESTAS PREDICHAS
+    // 4. SIESTAS PREDICHAS (Solo día)
     if (isDayMode) {
       for (final pred in napPredictions) {
         final cs = pred.start.isBefore(startTime) ? startTime : pred.start;
@@ -121,7 +190,6 @@ class ClockPainter extends CustomPainter {
         final arcStart = startAngle + sf * sweepAngle;
         final arcSweep = (ef - sf) * sweepAngle;
 
-        // Llamamos al nuevo efecto de bloque rayado
         _drawPredictedBlock(
           canvas,
           rect,
@@ -139,8 +207,8 @@ class ClockPainter extends CustomPainter {
         _drawArcLabel(canvas, size, endLabel, arcStart + arcSweep);
       }
     }
-  }
-
+  }  
+  
   void _drawPredictedBlock(
     Canvas canvas,
     Rect rect,
@@ -148,36 +216,31 @@ class ClockPainter extends CustomPainter {
     double sweep,
     Color color,
   ) {
-    // 1. Fondo sólido suave (el bloque completo)
     canvas.drawArc(
       rect,
       start,
       sweep,
       false,
       Paint()
-        ..color = color.withOpacity(0.85)
+        ..color = color.withOpacity(0.5)
         ..style = PaintingStyle.stroke
         ..strokeWidth = _strokeW * 1.25
         ..strokeCap = StrokeCap.round,
     );
 
-    // 2. Patrón de rayas (stripes) superpuesto
     final stripePaint = Paint()
-      ..color = color.withOpacity(0.35)
+      ..color = color.withOpacity(0)
       ..style = PaintingStyle.stroke
       ..strokeWidth = _strokeW * 1.25
-      ..strokeCap =
-          StrokeCap.butt; // Corta en recto para parecer barras y no círculos
+      ..strokeCap = StrokeCap.butt; 
 
-    const double stripeSweep = 0.02; // Grosor de la raya (en radianes)
-    const double gapSweep = 0.035; // Espacio entre rayas
+    const double stripeSweep = 0.02; 
+    const double gapSweep = 0.035; 
     const double step = stripeSweep + gapSweep;
 
-    // Margen interior para que las rayas no sobresalgan por las puntas redondeadas
     double currentAngle = start + 0.05;
     final double endAngle = start + sweep - 0.05;
 
-    // Dibujamos las rayas iterando por el arco
     while (currentAngle < endAngle) {
       final drawSweep = (currentAngle + stripeSweep > endAngle)
           ? (endAngle - currentAngle)
@@ -230,5 +293,6 @@ class ClockPainter extends CustomPainter {
       old.startTime != startTime ||
       old.endTime != endTime ||
       old.events != events ||
-      old.napPredictions != napPredictions;
+      old.napPredictions != napPredictions ||
+      old.currentProgress != currentProgress;
 }

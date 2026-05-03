@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:app/core/models/event_type.dart';
 import 'package:flutter/material.dart';
 import 'clock_palette.dart';
@@ -26,29 +28,113 @@ class TimeLabel extends StatelessWidget {
 /// Icono circular de evento
 class EventIcon extends StatelessWidget {
   final EventType eventType;
-  const EventIcon({super.key, required this.eventType});
+  final bool isPrediction;
+  
+  const EventIcon({
+    super.key, 
+    required this.eventType,
+    this.isPrediction = false,
+  });
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: 34,
-    height: 34,
-    decoration: BoxDecoration(
-      color: ClockPalette.surface,
-      shape: BoxShape.circle,
-      border: Border.all(
-        color: eventType.accentColor.withOpacity(0.75),
-        width: 1.5,
-      ),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.35),
-          blurRadius: 6,
-          offset: const Offset(0, 2),
+  Widget build(BuildContext context) {
+    final borderColor = eventType.getAccentColor(context).withOpacity(0.75);
+
+    Widget innerContainer = Container(
+      width: 34,
+      height: 34,
+      decoration: BoxDecoration(
+        color: ClockPalette.surface,
+        shape: BoxShape.circle,
+        border: isPrediction ? null : Border.all(
+          color: borderColor,
+          width: 1.5,
         ),
-      ],
-    ),
-    child: Icon(eventType.icon, size: 16, color: eventType.accentColor),
-  );
+        boxShadow: isPrediction ? [] : [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.35),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        clipBehavior: Clip.none,
+        children: [
+          Icon(eventType.icon, size: 16, color: eventType.getAccentColor(context)),
+          if (isPrediction)
+            Positioned(
+              top: -4,
+              right: -4,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: ClockPalette.surface,
+                ),
+                child: Icon(
+                  Icons.auto_awesome_rounded,
+                  size: 10,
+                  color: Colors.amber.shade500,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+
+    if (isPrediction) {
+      return CustomPaint(
+        painter: _DashedCirclePainter(color: borderColor, strokeWidth: 1.5),
+        child: innerContainer,
+      );
+    }
+
+    return innerContainer;
+  }
+}
+
+class _DashedCirclePainter extends CustomPainter {
+  final Color color;
+  final double strokeWidth;
+
+  _DashedCirclePainter({required this.color, required this.strokeWidth});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke;
+
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+
+    const dashWidth = 4.0;
+    const dashSpace = 3.0;
+    final circumference = 2 * math.pi * radius;
+    final dashCount = (circumference / (dashWidth + dashSpace)).floor();
+    final sweepAngle = (dashWidth / circumference) * 2 * math.pi;
+    final spaceAngle = (dashSpace / circumference) * 2 * math.pi;
+
+    double startAngle = 0.0;
+    for (int i = 0; i < dashCount; i++) {
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        startAngle,
+        sweepAngle,
+        false,
+        paint,
+      );
+      startAngle += sweepAngle + spaceAngle;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedCirclePainter oldDelegate) {
+    return oldDelegate.color != color || oldDelegate.strokeWidth != strokeWidth;
+  }
 }
 
 /// Toggle sol / luna
