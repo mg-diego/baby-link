@@ -1,4 +1,4 @@
-import 'package:app/api/api_service.dart';
+import 'package:app/core/network/api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 

@@ -1,8 +1,8 @@
-import 'package:app/core/widgets/custom_top_bar.dart';
+import 'package:app/shared/widgets/custom_top_bar.dart';
 import 'package:app/features/analytics/providers/daily_summary_provider.dart';
 import 'package:app/features/analytics/views/widgets/category_selector.dart';
 import 'package:app/features/analytics/views/widgets/chart_widgets.dart';
-import 'package:app/features/events/views/widgets/date_selector.dart';
+import 'package:app/features/widgets/date_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

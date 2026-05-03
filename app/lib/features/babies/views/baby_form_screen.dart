@@ -1,8 +1,8 @@
-import 'package:app/features/auth/services/auth_provider.dart';
+import 'package:app/features/auth/providers/auth_provider.dart';
 import 'package:app/features/babies/providers/baby_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../api/api_service.dart';
+import '../../../core/network/api_service.dart';
 
 class BabyFormScreen extends ConsumerStatefulWidget {
   const BabyFormScreen({super.key});

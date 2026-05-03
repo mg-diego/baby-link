@@ -1,4 +1,4 @@
-import 'package:app/features/auth/services/auth_provider.dart';
+import 'package:app/features/auth/providers/auth_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../babies/providers/baby_provider.dart';
