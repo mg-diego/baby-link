@@ -83,7 +83,7 @@ class BiologicalCycleView extends ConsumerWidget {
         divider,
         btn(EventType.nightWaking, isDisabled: isWakingActive),
         divider,
-        btn(EventType.wokeUp),
+        btn(EventType.wokeUp, isDisabled: isWakingActive),
       ];
     }
 
@@ -94,7 +94,7 @@ class BiologicalCycleView extends ConsumerWidget {
       divider,
       btn(EventType.nap, isDisabled: isNapActive),
       divider,
-      btn(EventType.bedtime),
+      btn(EventType.bedtime, isDisabled: isNapActive),
     ];
   }
 
@@ -408,16 +408,6 @@ class BiologicalCycleView extends ConsumerWidget {
 
                 const SizedBox(height: 8),
 
-                // ── Ongoing event banners ────────────────────────────────────
-                ...ongoingEvents.map(
-                  (e) => OngoingEventBanner(
-                    event: e,
-                    isNightMode: isNightMode,
-                    onTap: () => onTapEvent(e),
-                    onStop: () => onStopEvent(e),
-                  ),
-                ),
-
                 // ── Clock ────────────────────────────────────────────────────
                 Expanded(
                   child: VisualClockView(
@@ -439,25 +429,26 @@ class BiologicalCycleView extends ConsumerWidget {
                 // ── Quick-action bar ─────────────────────────────────────────
                 Container(
                   margin: const EdgeInsets.only(
+                    top: 16,
                     left: 60,
                     right: 60,
-                    bottom: 16, // Reducido para que quede más pegado abajo
+                    bottom: 16,
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(
                       22,
-                    ), // Reducido para ajustarse al nuevo tamaño
+                    ),
                     child: BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                          vertical: 6, // Mucho más compacto verticalmente
+                          vertical: 6,
                           horizontal: 8,
                         ),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(
                             22,
-                          ), // Tiene que coincidir con el ClipRRect
+                          ),
                           gradient: isNightMode
                               ? LinearGradient(
                                   begin: Alignment.topLeft,
@@ -538,6 +529,35 @@ class BiologicalCycleView extends ConsumerWidget {
                     ),
                   ),
                 ),
+
+                SizedBox(
+                  height:
+                      150, // altura de un banner (~76px contenido + 12px padding vertical)
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: ongoingEvents
+                        .map(
+                          (e) => OngoingEventBanner(
+                            event: e,
+                            isNightMode: isNightMode,
+                            onTap: () => onTapEvent(e),
+                            onStop: () => onStopEvent(e),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+/*
+                // ── Ongoing event banners ────────────────────────────────────
+                ...ongoingEvents.map(
+                  (e) => OngoingEventBanner(
+                    event: e,
+                    isNightMode: isNightMode,
+                    onTap: () => onTapEvent(e),
+                    onStop: () => onStopEvent(e),
+                  ),
+                ),*/
               ],
             ),
           ),

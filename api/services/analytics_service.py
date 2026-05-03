@@ -54,8 +54,8 @@ class AnalyticsService:
         if df.empty:
             return {"summary_cards": [], "charts": []}
 
-        df['start_time'] = pd.to_datetime(df['start_time'])
-        df['end_time'] = pd.to_datetime(df['end_time'])
+        df['start_time'] = pd.to_datetime(df['start_time'], format='ISO8601')
+        df['end_time'] = pd.to_datetime(df['end_time'], format='ISO8601')
         
         df = df[df['category'] == 'nap'].copy()
 

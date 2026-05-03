@@ -390,8 +390,6 @@ class _DateSelectorState extends ConsumerState<DateSelector> {
                 _buildQuickChip(context, '7 días', todayDate.subtract(const Duration(days: 6)), todayDate),
                 _buildQuickChip(context, '30 días', todayDate.subtract(const Duration(days: 29)), todayDate),
                 _buildQuickChip(context, '3 meses', DateTime(todayDate.year, todayDate.month - 3, todayDate.day), todayDate),
-                _buildQuickChip(context, '6 meses', DateTime(todayDate.year, todayDate.month - 6, todayDate.day), todayDate),
-                _buildQuickChip(context, 'Todo', minimumDate, todayDate),
               ],
             ),
           ),

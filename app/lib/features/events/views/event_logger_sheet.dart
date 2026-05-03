@@ -51,10 +51,15 @@ class EventLoggerSheet extends ConsumerWidget {
     }
 
     final activeNursing = ref.read(activeBreastfeedingProvider);
-    final isStoppingNursing = eventType == EventType.nursing && activeNursing != null;
+    final isStoppingNursing =
+        eventType == EventType.nursing && activeNursing != null;
 
     // Helper unificado para guardar, cerrar ambas capas (Formulario y Grid) y notificar
-    void executeAndClose(BuildContext formCtx, Future<void> Function() action, String successMessage) async {
+    void executeAndClose(
+      BuildContext formCtx,
+      Future<void> Function() action,
+      String successMessage,
+    ) async {
       Navigator.pop(formCtx); // Cierra el formulario activo
       Navigator.pop(context); // Cierra el menú Grid que quedó debajo
 
@@ -78,7 +83,9 @@ class EventLoggerSheet extends ConsumerWidget {
         ),
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(ctx).viewInsets.bottom,
-          left: 20, right: 20, top: 10,
+          left: 20,
+          right: 20,
+          top: 10,
         ),
         child: SingleChildScrollView(
           child: Column(
@@ -86,8 +93,13 @@ class EventLoggerSheet extends ConsumerWidget {
             children: [
               Center(
                 child: Container(
-                  width: 40, height: 4, margin: const EdgeInsets.only(bottom: 16, top: 8),
-                  decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16, top: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
               ),
               Row(
@@ -96,15 +108,26 @@ class EventLoggerSheet extends ConsumerWidget {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: eventType.getAccentColor(context).withOpacity(0.12),
+                      color: eventType
+                          .getAccentColor(context)
+                          .withOpacity(0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(eventType.icon, color: eventType.getAccentColor(context), size: 22),
+                    child: Icon(
+                      eventType.icon,
+                      color: eventType.getAccentColor(context),
+                      size: 22,
+                    ),
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    isStoppingNursing ? 'Detener ${eventType.uiLabel}' : eventType.uiLabel,
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    isStoppingNursing
+                        ? 'Detener ${eventType.uiLabel}'
+                        : eventType.uiLabel,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ),
@@ -112,72 +135,145 @@ class EventLoggerSheet extends ConsumerWidget {
 
               if (isStoppingNursing)
                 NursingForm(
-                  isEditing: true, initialStartTime: activeNursing.startTime, initialEndTime: DateTime.now(),
+                  isEditing: true,
+                  initialStartTime: activeNursing.startTime,
+                  initialEndTime: DateTime.now(),
                   onSave: (meta, time, [end]) => executeAndClose(
                     ctx,
-                    () => actionService.stopNursingEvent(babyId, activeNursing, meta, end!),
+                    () => actionService.stopNursingEvent(
+                      babyId,
+                      activeNursing,
+                      meta,
+                      end!,
+                    ),
                     'Toma finalizada',
                   ),
                 )
               else if (eventType == EventType.wokeUp)
                 WakeUpForm(
                   onSave: (meta, time) => executeAndClose(
-                    ctx, () => actionService.logEvent(babyId, eventType.backendCategory, meta, time), 'Despertar registrado',
+                    ctx,
+                    () => actionService.logEvent(
+                      babyId,
+                      eventType.backendCategory,
+                      meta,
+                      time,
+                    ),
+                    'Despertar registrado',
                   ),
                 )
               else if (eventType == EventType.bedtime)
                 BedtimeForm(
                   onSave: (meta, time) => executeAndClose(
-                    ctx, () => actionService.logEvent(babyId, eventType.backendCategory, meta, time), 'A dormir registrado',
+                    ctx,
+                    () => actionService.logEvent(
+                      babyId,
+                      eventType.backendCategory,
+                      meta,
+                      time,
+                    ),
+                    'A dormir registrado',
                   ),
                 )
               else if (eventType == EventType.bottle)
                 BottleForm(
                   onSave: (meta, time) => executeAndClose(
-                    ctx, () => actionService.logEvent(babyId, eventType.backendCategory, meta, time), 'Biberón registrado',
+                    ctx,
+                    () => actionService.logEvent(
+                      babyId,
+                      eventType.backendCategory,
+                      meta,
+                      time,
+                    ),
+                    'Biberón registrado',
                   ),
                 )
               else if (eventType == EventType.nursing)
                 NursingForm(
                   onSave: (meta, time, [end]) => executeAndClose(
-                    ctx, () => actionService.startNursingEvent(babyId, meta, time), 'Toma iniciada',
+                    ctx,
+                    () => actionService.startNursingEvent(babyId, meta, time),
+                    'Toma iniciada',
                   ),
                 )
               else if (eventType == EventType.solids)
                 SolidsForm(
                   onSave: (meta, time) => executeAndClose(
-                    ctx, () => actionService.logEvent(babyId, eventType.backendCategory, meta, time), 'Comida registrada',
+                    ctx,
+                    () => actionService.logEvent(
+                      babyId,
+                      eventType.backendCategory,
+                      meta,
+                      time,
+                    ),
+                    'Comida registrada',
                   ),
                 )
               else if (eventType == EventType.diaper)
                 DiaperForm(
                   onSave: (meta, time) => executeAndClose(
-                    ctx, () => actionService.logEvent(babyId, eventType.backendCategory, meta, time), 'Pañal registrado',
+                    ctx,
+                    () => actionService.logEvent(
+                      babyId,
+                      eventType.backendCategory,
+                      meta,
+                      time,
+                    ),
+                    'Pañal registrado',
                   ),
                 )
               else if (eventType == EventType.temperature)
                 TemperatureForm(
                   onSave: (meta, time) => executeAndClose(
-                    ctx, () => actionService.logEvent(babyId, eventType.backendCategory, meta, time), 'Temperatura registrada',
+                    ctx,
+                    () => actionService.logEvent(
+                      babyId,
+                      eventType.backendCategory,
+                      meta,
+                      time,
+                    ),
+                    'Temperatura registrada',
                   ),
                 )
-              else if (eventType == EventType.medicine || eventType == EventType.bath)
+              else if (eventType == EventType.medicine ||
+                  eventType == EventType.bath)
                 BasicNotesForm(
                   onSave: (meta, time) => executeAndClose(
-                    ctx, () => actionService.logEvent(babyId, eventType.backendCategory, meta, time), '${eventType.uiLabel} registrado/a',
+                    ctx,
+                    () => actionService.logEvent(
+                      babyId,
+                      eventType.backendCategory,
+                      meta,
+                      time,
+                    ),
+                    '${eventType.uiLabel} registrado/a',
                   ),
                 )
               else if (eventType == EventType.growth)
                 GrowthForm(
                   onSave: (meta, time) => executeAndClose(
-                    ctx, () => actionService.logEvent(babyId, eventType.backendCategory, meta, time), 'Crecimiento registrado',
+                    ctx,
+                    () => actionService.logEvent(
+                      babyId,
+                      eventType.backendCategory,
+                      meta,
+                      time,
+                    ),
+                    'Crecimiento registrado',
                   ),
                 )
               else
                 PlaceholderForm(
                   title: eventType.uiLabel,
                   onSave: (meta, time) => executeAndClose(
-                    ctx, () => actionService.logEvent(babyId, eventType.backendCategory, meta, time), '${eventType.uiLabel} registrado/a',
+                    ctx,
+                    () => actionService.logEvent(
+                      babyId,
+                      eventType.backendCategory,
+                      meta,
+                      time,
+                    ),
+                    '${eventType.uiLabel} registrado/a',
                   ),
                 ),
               const SizedBox(height: 30),
@@ -191,15 +287,31 @@ class EventLoggerSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final now = DateTime.now();
-    final todayArgs = (babyId: babyId, date: DateTime(now.year, now.month, now.day));
-    final yesterdayArgs = (babyId: babyId, date: DateTime(now.year, now.month, now.day).subtract(const Duration(days: 1)));
+    final todayArgs = (
+      babyId: babyId,
+      date: DateTime(now.year, now.month, now.day),
+    );
+    final yesterdayArgs = (
+      babyId: babyId,
+      date: DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ).subtract(const Duration(days: 1)),
+    );
 
-    final todayEvents = ref.watch(dailyEventsProvider(todayArgs)).asData?.value ?? [];
-    final yesterdayEvents = ref.watch(dailyEventsProvider(yesterdayArgs)).asData?.value ?? [];
+    final todayEvents =
+        ref.watch(dailyEventsProvider(todayArgs)).asData?.value ?? [];
+    final yesterdayEvents =
+        ref.watch(dailyEventsProvider(yesterdayArgs)).asData?.value ?? [];
     final lastEventsAsync = ref.watch(lastEventsProvider(babyId));
 
     final allEvents = [...todayEvents, ...yesterdayEvents]
-      ..sort((a, b) => DateTime.parse(b['start_time']).compareTo(DateTime.parse(a['start_time'])));
+      ..sort(
+        (a, b) => DateTime.parse(
+          b['start_time'],
+        ).compareTo(DateTime.parse(a['start_time'])),
+      );
 
     DateTime? lastWokeUp;
     DateTime? lastBedTime;
@@ -221,7 +333,11 @@ class EventLoggerSheet extends ConsumerWidget {
     }
 
     bool isEventActive(EventType type) {
-      if (type != EventType.nap && type != EventType.nightWaking && type != EventType.nursing && type != EventType.pumping) return false;
+      if (type != EventType.nap &&
+          type != EventType.nightWaking &&
+          type != EventType.nursing &&
+          type != EventType.pumping)
+        return false;
       return todayEvents.any((e) {
         final cat = e['category'];
         final meta = (e['metadata'] as Map<String, dynamic>?) ?? {};
@@ -263,7 +379,9 @@ class EventLoggerSheet extends ConsumerWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.95),
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withOpacity(0.95),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
@@ -271,24 +389,35 @@ class EventLoggerSheet extends ConsumerWidget {
         children: [
           Center(
             child: Container(
-              width: 40, height: 4, margin: const EdgeInsets.only(bottom: 12, top: 10),
-              decoration: BoxDecoration(color: Colors.grey.shade400, borderRadius: BorderRadius.circular(10)),
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 12, top: 10),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade400,
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
           ),
           const Padding(
             padding: EdgeInsets.only(bottom: 12),
-            child: Text('Registrar Actividad', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+            child: Text(
+              'Registrar Actividad',
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+            ),
           ),
           Flexible(
             child: ListView(
               shrinkWrap: true,
               padding: EdgeInsets.only(
-                left: 12, right: 12, top: 8,
+                left: 12,
+                right: 12,
+                top: 8,
                 bottom: MediaQuery.of(context).viewInsets.bottom + 32,
               ),
               children: orderedGroups.map((groupKey) {
                 final events = groupedEvents[groupKey];
-                if (events == null || events.isEmpty) return const SizedBox.shrink();
+                if (events == null || events.isEmpty)
+                  return const SizedBox.shrink();
 
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 16),
@@ -300,15 +429,23 @@ class EventLoggerSheet extends ConsumerWidget {
                         child: Row(
                           children: [
                             Container(
-                              width: 4, height: 16,
-                              decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, borderRadius: BorderRadius.circular(2)),
+                              width: 4,
+                              height: 16,
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.primary,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
                             ),
                             const SizedBox(width: 8),
                             Text(
                               groupLabels[groupKey]!.toUpperCase(),
                               style: TextStyle(
-                                fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1.2,
-                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.2,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withOpacity(0.7),
                               ),
                             ),
                           ],
@@ -316,23 +453,33 @@ class EventLoggerSheet extends ConsumerWidget {
                       ),
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 12,
+                          horizontal: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: Theme.of(context).colorScheme.surface,
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
-                            BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 12, offset: const Offset(0, 4)),
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.04),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
                           ],
                         ),
                         child: Wrap(
-                          spacing: 8, runSpacing: 12, alignment: WrapAlignment.start,
+                          spacing: 8,
+                          runSpacing: 12,
+                          alignment: WrapAlignment.start,
                           children: events.map((eventType) {
                             return EventGridButton(
                               eventType: eventType,
                               isDisabled: isLogicallyDisabled(eventType),
                               isActive: isEventActive(eventType),
                               lastEventsAsync: lastEventsAsync,
-                              onTap: () => _showEventForm(context, ref, eventType),
+                              onTap: () =>
+                                  _showEventForm(context, ref, eventType),
                             );
                           }).toList(),
                         ),
