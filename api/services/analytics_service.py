@@ -298,3 +298,134 @@ class AnalyticsService:
             "summary_cards": summary_cards,
             "charts": [total_sleep_chart, total_wake_chart, wake_count_chart]
         }
+
+    def generate_feed_analytics(self, baby_id: str, start_date: str, end_date: str):
+        feed_events = self.repository.get_events_by_category(baby_id, "feed", start_date, end_date)
+        df = pd.DataFrame(feed_events)
+        
+        if df.empty:
+            return {"summary_cards": [], "charts": []}
+
+        df['start_time'] = pd.to_datetime(df['start_time'], format='ISO8601', utc=True)
+        if 'end_time' in df.columns:
+            df['end_time'] = pd.to_datetime(df['end_time'], format='ISO8601', utc=True)
+        else:
+            df['end_time'] = df['start_time']
+
+        def safe_float(val):
+            if val in [None, ""]: return 0.0
+            try: return float(val)
+            except (ValueError, TypeError): return 0.0
+            
+        df['feed_type'] = df['metadata'].apply(lambda x: x.get('type') if isinstance(x, dict) else None)
+        df['ml_amount'] = df['metadata'].apply(lambda x: safe_float(x.get('amount_ml')) if isinstance(x, dict) else 0.0)
+        df['left_mins'] = df['metadata'].apply(lambda x: safe_float(x.get('left_duration')) if isinstance(x, dict) else 0.0)
+        df['right_mins'] = df['metadata'].apply(lambda x: safe_float(x.get('right_duration')) if isinstance(x, dict) else 0.0)
+        
+        df['nursing_hrs'] = 0.0
+        nursing_mask = df['feed_type'] == 'nursing'
+        if not df[nursing_mask].empty:
+            df.loc[nursing_mask, 'nursing_hrs'] = (df.loc[nursing_mask, 'end_time'] - df.loc[nursing_mask, 'start_time']).dt.total_seconds() / 3600.0
+
+        df['logical_date'] = df['start_time'].dt.strftime('%Y-%m-%d')
+
+        date_range = pd.date_range(start=start_date, end=end_date).strftime('%Y-%m-%d')
+        label_mapping = {}
+        for d in date_range:
+            dt_obj = pd.to_datetime(d)
+            meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+            label_mapping[d] = f"{dt_obj.day} {meses[dt_obj.month - 1]}"
+            
+        x_labels = list(label_mapping.values())
+
+        milk_df = df[df['feed_type'].isin(['nursing', 'bottle'])]
+        milk_counts = milk_df.groupby('logical_date').size().reindex(date_range, fill_value=0).tolist()
+        
+        nursing_df = df[df['feed_type'] == 'nursing']
+        nursing_totals_hrs = nursing_df.groupby('logical_date')['nursing_hrs'].sum().reindex(date_range, fill_value=0).tolist()
+        
+        ml_totals = df[df['feed_type'] == 'bottle'].groupby('logical_date')['ml_amount'].sum().reindex(date_range, fill_value=0).tolist()
+
+        total_left_mins = df['left_mins'].sum()
+        total_right_mins = df['right_mins'].sum()
+        
+        count_nursing = len(nursing_df)
+        count_bottle = len(df[df['feed_type'] == 'bottle'])
+        count_solids = len(df[df['feed_type'] == 'solids'])
+        
+        active_days = len(df['logical_date'].unique())
+        
+        avg_milk_feeds = sum(milk_counts) / active_days if active_days > 0 else 0
+        avg_ml = sum(ml_totals) / active_days if active_days > 0 else 0
+        
+        summary_cards = [
+            {"label": "Media Tomas/Día", "value": str(round(avg_milk_feeds, 1)), "trend": None},
+            {"label": "Media Biberón", "value": f"{int(avg_ml)} ml/día", "trend": None}
+        ]
+
+        milk_count_chart = {
+            "id": "feed_milk_count",
+            "title": "Tomas por día",
+            "type": "stacked_bar",
+            "data": {
+                "x_labels": x_labels,
+                "series": [{"name": "Tomas", "data": [int(x) for x in milk_counts]}]
+            }
+        }
+
+        nursing_time_chart = {
+            "id": "feed_nursing_time",
+            "title": "Tiempo de lactancia",
+            "type": "stacked_bar",
+            "data": {
+                "x_labels": x_labels,
+                "series": [{"name": "Horas al pecho", "data": [round(x, 2) for x in nursing_totals_hrs]}]
+            }
+        }
+
+        bottle_ml_chart = {
+            "id": "feed_bottle_ml",
+            "title": "Cantidad de fórmula/leche extraída",
+            "type": "line",
+            "data": {
+                "x_labels": x_labels,
+                "series": [{"name": "Volumen (ml)", "data": [int(x) for x in ml_totals]}]
+            }
+        }
+
+        breast_dist_chart = {
+            "id": "feed_breast_dist",
+            "title": "Distribución por pecho (min)",
+            "type": "donut",
+            "data": {
+                "x_labels": ["Izquierdo", "Derecho"],
+                "series": [{
+                    "name": "Minutos", 
+                    "data": [int(total_left_mins), int(total_right_mins)]
+                }]
+            }
+        }
+
+        type_dist_chart = {
+            "id": "feed_type_dist",
+            "title": "Distribución de tomas",
+            "type": "donut",
+            "data": {
+                "x_labels": ["Lactancia", "Biberón", "Sólidos"],
+                "series": [{
+                    "name": "Cantidad", 
+                    "data": [count_nursing, count_bottle, count_solids]
+                }]
+            }
+        }
+
+        return {
+            "summary_cards": summary_cards,
+            "charts": [
+                milk_count_chart,
+                nursing_time_chart,
+                bottle_ml_chart,
+                breast_dist_chart,
+                type_dist_chart
+            ]
+        }

@@ -218,8 +218,10 @@ def get_stats(
                 return {"status": "success", "data": {"summary_cards": [], "charts": []}}
             
         elif category == "Alimentación":
-            # Devolvemos un mock vacío para evitar crash si el usuario toca otra pestaña
-            return {"status": "success", "data": {"summary_cards": [], "charts": []}}
+            return {
+                    "status": "success",
+                    "data": service.generate_feed_analytics(baby_id, start_date, end_date)
+                }
             
         elif category == "Pañales":
             return {"status": "success", "data": {"summary_cards": [], "charts": []}}

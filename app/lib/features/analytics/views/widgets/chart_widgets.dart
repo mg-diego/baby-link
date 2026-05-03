@@ -270,6 +270,11 @@ class CustomStackedBarChart extends StatelessWidget {
     final xLabels = List<String>.from(data['x_labels'] ?? []);
     final series = List<Map<String, dynamic>>.from(data['series'] ?? []);
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final dynamicBarWidth = xLabels.isNotEmpty
+        ? ((screenWidth - 100) / (xLabels.length * 1.2)).clamp(4.0, 35.0)
+        : 25.0;
+
     List<BarChartGroupData> barGroups = [];
     double maxY = 0;
 
@@ -296,8 +301,8 @@ class CustomStackedBarChart extends StatelessWidget {
             BarChartRodData(
               toY: currentY,
               rodStackItems: stackItems,
-              width: 25,
-              borderRadius: BorderRadius.circular(6),
+              width: dynamicBarWidth,
+              borderRadius: BorderRadius.circular(dynamicBarWidth > 8 ? 6 : 2),
             ),
           ],
         ),
@@ -305,6 +310,7 @@ class CustomStackedBarChart extends StatelessWidget {
     }
 
     maxY = (maxY + 2).ceilToDouble();
+    
     int xInterval = (xLabels.length / 6).ceil();
     if (xInterval < 1) xInterval = 1;
 
@@ -318,7 +324,6 @@ class CustomStackedBarChart extends StatelessWidget {
               barTouchData: BarTouchData(
                 touchTooltipData: BarTouchTooltipData(
                   getTooltipColor: (group) => Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.9),
-                  //tooltipRoundedRadius: 12,
                   getTooltipItem: (group, groupIndex, rod, rodIndex) {
                     final dateLabel = xLabels[group.x];
                     List<TextSpan> children = [];
@@ -352,9 +357,14 @@ class CustomStackedBarChart extends StatelessWidget {
                   sideTitles: SideTitles(
                     showTitles: true,
                     reservedSize: 30,
-                    interval: xInterval.toDouble(),
+                    interval: 1, 
                     getTitlesWidget: (value, meta) {
                       final index = value.toInt();
+                      
+                      if (index % xInterval != 0) {
+                        return const SizedBox.shrink();
+                      }
+
                       if (index >= 0 && index < xLabels.length) {
                         return Padding(
                           padding: const EdgeInsets.only(top: 8.0),
@@ -364,7 +374,7 @@ class CustomStackedBarChart extends StatelessWidget {
                           ),
                         );
                       }
-                      return const Text('');
+                      return const SizedBox.shrink();
                     },
                   ),
                 ),
@@ -373,7 +383,7 @@ class CustomStackedBarChart extends StatelessWidget {
                     showTitles: true,
                     reservedSize: 40,
                     getTitlesWidget: (value, meta) {
-                      if (value == 0) return const Text('');
+                      if (value == 0) return const SizedBox.shrink();
                       return Text(
                         '${value.toInt()}h', 
                         style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
