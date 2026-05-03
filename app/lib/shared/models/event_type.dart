@@ -33,7 +33,7 @@ enum EventType {
   ),
   nursing(
     'Lactancia', 'feed', 'feeding',
-    Icons.favorite_rounded, 'breast',
+    Icons.favorite_rounded, 'nursing',
     Color(0xFFA2F6D0),
   ),
   solids(

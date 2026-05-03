@@ -41,7 +41,7 @@ class EventRepository:
         for event in raw_active_events:
             if event['category'] == 'feed':
                 metadata_type = event.get('metadata', {}).get('type')
-                if metadata_type != 'breast':
+                if metadata_type != 'nursing':
                     continue
                     
             valid_active_events.append(event)

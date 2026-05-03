@@ -1,8 +1,5 @@
-// lib/features/events/services/event_action_service.dart
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:app/core/network/api_service.dart';
-import 'package:app/shared/models/event_type.dart';
 import 'package:app/features/events/providers/events_provider.dart';
 import 'package:app/features/analytics/providers/daily_summary_provider.dart';
 
@@ -40,16 +37,18 @@ class EventActionService {
   }
 
   Future<void> startNursingEvent(String babyId, Map<String, dynamic> meta, DateTime time) async {
+    meta['type'] = 'nursing';
+
     final response = await ApiService.registerEvent(
       babyId,
-      EventType.nursing.backendCategory,
+      'feed',
       meta,
       startTime: time,
     );
 
     final eventId = response['id'] ?? response['data']?['id'];
     
-    ref.read(activeBreastfeedingProvider.notifier).start(eventId.toString(), time);
+    ref.read(activeNursingProvider.notifier).start(eventId.toString(), time);
     refreshLists(babyId);
   }
 
@@ -58,20 +57,22 @@ class EventActionService {
       throw Exception('La hora de fin no puede ser anterior al inicio');
     }
 
+    meta['type'] = 'nursing';
+
     await ApiService.updateEvent(activeEvent.eventId, {
       'end_time': endTime.toUtc().toIso8601String(),
       'metadata': meta,
     });
 
-    ref.read(activeBreastfeedingProvider.notifier).stop();
+    ref.read(activeNursingProvider.notifier).stop();
     refreshLists(babyId);
   }
 
   Future<void> updateEvent(String babyId, String eventId, Map<String, dynamic> payload, {String? categoryToStop}) async {
     await ApiService.updateEvent(eventId, payload);
     
-    if (categoryToStop == 'nursing' && payload.containsKey('end_time')) {
-      ref.read(activeBreastfeedingProvider.notifier).stop();
+    if ((categoryToStop == 'nursing' || categoryToStop == 'feed') && payload.containsKey('end_time')) {
+      ref.read(activeNursingProvider.notifier).stop();
     }
     refreshLists(babyId);
   }
@@ -82,7 +83,7 @@ class EventActionService {
     if (endTimeStr == null) {
       if (category == 'nap') ref.read(activeNapProvider.notifier).stop();
       if (category == 'night_waking') ref.read(activeNightWakingProvider.notifier).stop();
-      if (category == 'nursing') ref.read(activeBreastfeedingProvider.notifier).stop();
+      if (category == 'nursing' || category == 'feed') ref.read(activeNursingProvider.notifier).stop();
       if (category == 'pumping') ref.read(activePumpingProvider.notifier).stop();
     }
     refreshLists(babyId);

@@ -12,7 +12,7 @@ class DurationEventHandler {
   getProviderForEventType(EventType type) {
     if (type == EventType.nap) return activeNapProvider;
     if (type == EventType.nightWaking) return activeNightWakingProvider;
-    if (type == EventType.nursing) return activeBreastfeedingProvider;
+    if (type == EventType.nursing) return activeNursingProvider;
     if (type == EventType.pumping) return activePumpingProvider;
     return null;
   }
@@ -130,7 +130,7 @@ class DurationEventHandler {
 
     try {
       Map<String, dynamic> metadata = {};
-      if (eventType == EventType.nursing) metadata = {'type': 'breast'};
+      if (eventType == EventType.nursing) metadata = {'type': 'nursing'};
       if (eventType == EventType.nap) {
         final predictions = ref
             .read(sleepPredictionProvider(babyId))

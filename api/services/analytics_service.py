@@ -393,8 +393,8 @@ class AnalyticsService:
             }
         }
 
-        breast_dist_chart = {
-            "id": "feed_breast_dist",
+        nursing_dist_chart = {
+            "id": "feed_nursing_dist",
             "title": "Distribución por pecho (min)",
             "type": "donut",
             "data": {
@@ -425,7 +425,7 @@ class AnalyticsService:
                 milk_count_chart,
                 nursing_time_chart,
                 bottle_ml_chart,
-                breast_dist_chart,
+                nursing_dist_chart,
                 type_dist_chart
             ]
         }

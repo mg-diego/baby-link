@@ -39,8 +39,8 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       } else if (category == 'night_waking') {
         ref.read(activeNightWakingProvider.notifier).start(eventId, startTime);
       } else if (category == 'feed' &&
-          event['metadata']?['type'] == 'breast') {
-        ref.read(activeBreastfeedingProvider.notifier).start(eventId, startTime);
+          event['metadata']?['type'] == 'nursing') {
+        ref.read(activeNursingProvider.notifier).start(eventId, startTime);
       } else if (category == 'pumping') {
         ref.read(activePumpingProvider.notifier).start(eventId, startTime);
       }

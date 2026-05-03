@@ -52,7 +52,7 @@ class _WidgetConfigScreenState extends State<WidgetConfigScreen> {
       case 'nursing':
         title = '🤱';
         queryParams['category'] = 'feed';
-        queryParams['type'] = 'breast';
+        queryParams['type'] = 'nursing';
         queryParams['side'] = _nursingSide;
         break;
       case 'solids':

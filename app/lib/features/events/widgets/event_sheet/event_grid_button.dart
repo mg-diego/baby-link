@@ -175,7 +175,7 @@ class EventGridButton extends StatelessWidget {
                         final key = eventType == EventType.bottle
                             ? 'bottle'
                             : eventType == EventType.nursing
-                                ? 'breast'
+                                ? 'nursing'
                                 : eventType == EventType.solids
                                     ? 'solids'
                                     : eventType.backendCategory;

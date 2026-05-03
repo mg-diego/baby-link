@@ -66,7 +66,7 @@ class EventService:
             
             if category == 'feed':
                 feed_type = metadata.get('type')
-                if feed_type in ['solids', 'bottle', 'breast']:
+                if feed_type in ['solids', 'bottle', 'nursing']:
                     if feed_type not in last_events:
                         last_events[feed_type] = start_time
                 elif 'feed' not in last_events:
@@ -102,10 +102,10 @@ class EventService:
 
         if event.category == EventCategory.FEED:
             feed_type = event.metadata.get('type')
-            if feed_type != 'breast' and event.end_time is not None:
+            if feed_type != 'nursing' and event.end_time is not None:
                 raise HTTPException(
                     status_code=400, 
-                    detail="Solo las tomas de tipo 'breast' admiten 'end_time'."
+                    detail="Solo las tomas de tipo 'nursing' admiten 'end_time'."
                 )
 
     # --- Validadores de Metadatos (Payloads) ---
@@ -132,9 +132,9 @@ class EventService:
             )
 
     def _validate_feed_metadata(self, metadata: dict):
-        valid_types = ['bottle', 'breast', 'solids']
+        valid_types = ['bottle', 'nursing', 'solids']
         if 'type' not in metadata or metadata['type'] not in valid_types:
-            raise HTTPException(status_code=400, detail=f"Feed debe tener type: {valid_types}")
+            raise HTTPException(status_code=400, detail=f"Feed debe tener type: {valid_types} \n {metadata}")
 
     def _validate_diaper_metadata(self, metadata: dict):
         valid_conditions = ['wet', 'dirty', 'mixed', 'clean']

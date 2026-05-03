@@ -79,6 +79,8 @@ class BiologicalCycleView extends ConsumerWidget {
       return [
         btn(EventType.bottle),
         divider,
+        btn(EventType.nursing),
+        divider,
         btn(EventType.diaper),
         divider,
         btn(EventType.nightWaking, isDisabled: isWakingActive),
@@ -89,6 +91,8 @@ class BiologicalCycleView extends ConsumerWidget {
 
     return [
       btn(EventType.bottle),
+      divider,
+      btn(EventType.solids),
       divider,
       btn(EventType.diaper),
       divider,
@@ -255,8 +259,10 @@ class BiologicalCycleView extends ConsumerWidget {
 
     final ongoingEvents = allEvents.where((e) {
       final cat = e['category'];
+      final metadata = e['metadata'] as Map<String, dynamic>? ?? {};
+
       return e['end_time'] == null &&
-          (cat == 'nursing' ||
+          ((cat == 'feed' && metadata['type'] == 'nursing') ||
               cat == 'nap' ||
               cat == 'night_waking' ||
               cat == 'pumping');
@@ -272,25 +278,34 @@ class BiologicalCycleView extends ConsumerWidget {
       final eventsMap = lastEventsAsync.asData?.value ?? {};
 
       String? isoString;
+      
       if (type == EventType.diaper) {
         final wet = eventsMap['diaper_wet'] as String?;
         final dirty = eventsMap['diaper_dirty'] as String?;
         final wetDate = wet != null ? DateTime.tryParse(wet) : null;
         final dirtyDate = dirty != null ? DateTime.tryParse(dirty) : null;
+        
         DateTime? latest = wetDate;
-        if (dirtyDate != null &&
-            (latest == null || dirtyDate.isAfter(latest))) {
+        if (dirtyDate != null && (latest == null || dirtyDate.isAfter(latest))) {
           latest = dirtyDate;
         }
         isoString = latest?.toIso8601String();
       } else {
-        final key = type == EventType.bottle
-            ? 'bottle'
-            : type == EventType.nursing
-            ? 'breast'
-            : type == EventType.solids
-            ? 'solids'
-            : type.backendCategory;
+        String key;
+        switch (type) {
+          case EventType.bottle:
+            key = 'bottle';
+            break;
+          case EventType.nursing:
+            key = 'nursing';
+            break;
+          case EventType.solids:
+            key = 'solids';
+            break;
+          default:
+            key = type.backendCategory;
+        }
+        
         isoString = eventsMap[key] as String?;
       }
 
@@ -320,7 +335,7 @@ class BiologicalCycleView extends ConsumerWidget {
                           icon: Icon(
                             Icons.person_outline_rounded,
                             color: textColorSec,
-                            size: 28,
+                            size: 18,
                           ),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
@@ -374,7 +389,7 @@ class BiologicalCycleView extends ConsumerWidget {
 
                 // ── Date pill ───────────────────────────────────────────────
                 Container(
-                  margin: const EdgeInsets.only(bottom: 4),
+                  margin: const EdgeInsets.only(bottom: 36),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 14,
                     vertical: 8,
@@ -429,15 +444,13 @@ class BiologicalCycleView extends ConsumerWidget {
                 // ── Quick-action bar ─────────────────────────────────────────
                 Container(
                   margin: const EdgeInsets.only(
-                    top: 16,
+                    top: 24,
                     left: 60,
                     right: 60,
                     bottom: 16,
                   ),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(
-                      22,
-                    ),
+                    borderRadius: BorderRadius.circular(22),
                     child: BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
                       child: Container(
@@ -446,9 +459,7 @@ class BiologicalCycleView extends ConsumerWidget {
                           horizontal: 8,
                         ),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(
-                            22,
-                          ),
+                          borderRadius: BorderRadius.circular(22),
                           gradient: isNightMode
                               ? LinearGradient(
                                   begin: Alignment.topLeft,
@@ -548,7 +559,7 @@ class BiologicalCycleView extends ConsumerWidget {
                         .toList(),
                   ),
                 ),
-/*
+                /*
                 // ── Ongoing event banners ────────────────────────────────────
                 ...ongoingEvents.map(
                   (e) => OngoingEventBanner(
@@ -809,8 +820,8 @@ class BiologicalActionButton extends StatelessWidget {
               onTap: isDisabled ? null : onTap,
               customBorder: const CircleBorder(),
               child: Container(
-                width: 40,
-                height: 40,
+                width: 28,
+                height: 28,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: Theme.of(context).colorScheme.surface,
@@ -826,7 +837,7 @@ class BiologicalActionButton extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: Icon(eventType.icon, color: eventColor, size: 20),
+                child: Icon(eventType.icon, color: eventColor, size: 12),
               ),
             ),
           ),

@@ -58,7 +58,6 @@ class _NursingFormState extends State<NursingForm> {
           onTimeChanged: (newTime) => setState(() => _startTime = newTime),
         ),
         
-        // ── HORA DE FIN (SOLO VISIBLE SI ESTÁ EDITANDO O DETENIENDO) ──
         if (widget.isEditing) ...[
           const SizedBox(height: 16),
           const Text('Hora de fin:', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -69,7 +68,6 @@ class _NursingFormState extends State<NursingForm> {
               onTimeChanged: (newTime) => setState(() => _endTime = newTime),
             )
           else
-            // Si el evento está en curso pero lo abren en edición, permitimos ponerle fin
             OutlinedButton.icon(
               onPressed: () => setState(() => _endTime = DateTime.now()),
               icon: const Icon(Icons.stop_circle_outlined),
@@ -111,7 +109,7 @@ class _NursingFormState extends State<NursingForm> {
           child: ElevatedButton(
             onPressed: isValid ? () {
               widget.onSave({
-                'type': 'breast',
+                'type': 'nursing',
                 'side': _side,
                 'notes': _notes.text,
               }, _startTime, _endTime);

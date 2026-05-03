@@ -50,7 +50,7 @@ class EventLoggerSheet extends ConsumerWidget {
       return;
     }
 
-    final activeNursing = ref.read(activeBreastfeedingProvider);
+    final activeNursing = ref.read(activeNursingProvider);
     final isStoppingNursing =
         eventType == EventType.nursing && activeNursing != null;
 
