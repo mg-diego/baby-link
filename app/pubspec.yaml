@@ -19,6 +19,9 @@ dependencies:
   home_widget: ^0.9.1
   intl: ^0.20.2
   material_design_icons_flutter: ^7.0.0
+  image_picker: ^1.2.2
+  video_player: ^2.11.1
+  path: ^1.9.1
 
 dev_dependencies:
   flutter_test:
