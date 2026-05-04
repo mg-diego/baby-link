@@ -10,11 +10,11 @@ class _SkyFrame {
 }
 
 const _kFrames = [
-  _SkyFrame(0.0,  Color(0xFF0B0A1E), Color(0xFF13112A)),
-  _SkyFrame(5.0,  Color(0xFF1C1640), Color(0xFF5A3050)),
-  _SkyFrame(6.0,  Color(0xFF3A2858), Color(0xFFB87858)),
-  _SkyFrame(7.0,  Color(0xFF5878A8), Color(0xFFDDC49A)),
-  _SkyFrame(9.0,  Color(0xFF4A80AA), Color(0xFFD0E4F0)),
+  _SkyFrame(0.0, Color(0xFF0B0A1E), Color(0xFF13112A)),
+  _SkyFrame(5.0, Color(0xFF1C1640), Color(0xFF5A3050)),
+  _SkyFrame(6.0, Color(0xFF3A2858), Color(0xFFB87858)),
+  _SkyFrame(7.0, Color(0xFF5878A8), Color(0xFFDDC49A)),
+  _SkyFrame(9.0, Color(0xFF4A80AA), Color(0xFFD0E4F0)),
   _SkyFrame(12.0, Color(0xFF3A70A0), Color(0xFFCCDFEE)),
   _SkyFrame(15.0, Color(0xFF3C78A8), Color(0xFFD0E4EE)),
   _SkyFrame(17.5, Color(0xFF3A4A80), Color(0xFFD4B87A)),
@@ -73,13 +73,15 @@ class _DaySkyBackgroundState extends State<DaySkyBackground>
 
     final rng = math.Random(42);
     for (int i = 0; i < 7; i++) {
-      _clouds.add(_Cloud(
-        x: rng.nextDouble(),
-        y: rng.nextDouble() * 0.35 + 0.05,
-        scale: rng.nextDouble() * 1.2 + 0.65,
-        speed: rng.nextDouble() * 0.30 + 0.10,
-        opacity: rng.nextDouble() * 0.20 + 0.55,
-      ));
+      _clouds.add(
+        _Cloud(
+          x: rng.nextDouble(),
+          y: rng.nextDouble() * 0.35 + 0.05,
+          scale: rng.nextDouble() * 1.2 + 0.65,
+          speed: rng.nextDouble() * 0.30 + 0.10,
+          opacity: rng.nextDouble() * 0.20 + 0.55,
+        ),
+      );
     }
   }
 
@@ -171,12 +173,13 @@ class _DaySkyPainter extends CustomPainter {
 
     // Radio: crece con la intensidad — de pequeño (amanecer) a grande (mediodía)
     // Está mayormente por debajo del borde inferior, solo asoma la parte superior
-    final radius = size.width * (0.38 + sunIntensity * 0.22); // 38%–60% del ancho
+    final radius =
+        size.width * (0.18 + sunIntensity * 0.08); // 38%–60% del ancho
 
     // Centro del círculo: empieza muy abajo y sube ligeramente con la intensidad
     // Con intensity=0 → centro en 1.15*height (invisible)
     // Con intensity=1 → centro en 0.92*height (asoma un buen trozo)
-    final cy = size.height * (1.15 - sunIntensity * 0.23);
+    final cy = size.height * (1.06 - sunIntensity * 0.08);
 
     final center = Offset(cx, cy);
 
@@ -197,14 +200,14 @@ class _DaySkyPainter extends CustomPainter {
     // ── Glow difuso exterior ──────────────────────────────────────────────
     canvas.drawCircle(
       center,
-      radius * 1.35,
+      radius * 1.4,
       Paint()
         ..shader = RadialGradient(
           colors: [
-            glowColor.withOpacity(0.13 * sunIntensity),
+            glowColor.withOpacity(0.07 * sunIntensity),
             Colors.transparent,
           ],
-        ).createShader(Rect.fromCircle(center: center, radius: radius * 1.35)),
+        ).createShader(Rect.fromCircle(center: center, radius: radius * 1.4)),
     );
 
     // ── Disco principal ───────────────────────────────────────────────────
@@ -215,29 +218,32 @@ class _DaySkyPainter extends CustomPainter {
         ..shader = RadialGradient(
           center: const Alignment(0, -0.4),
           colors: [
-            Color.lerp(Colors.white, coreColor, 0.35)!
-                .withOpacity(0.72 * sunIntensity),
-            coreColor.withOpacity(0.55 * sunIntensity),
+            Color.lerp(
+              Colors.white,
+              coreColor,
+              0.35,
+            )!.withOpacity(0.45 * sunIntensity), // era 0.72
+            coreColor.withOpacity(0.30 * sunIntensity), // era 0.55
           ],
-          stops: const [0.0, 1.0],
         ).createShader(Rect.fromCircle(center: center, radius: radius)),
     );
 
     // ── Borde superior suave (limbo del sol) ──────────────────────────────
     // Línea de luz difusa justo donde el sol asoma por el horizonte
-    if (sunIntensity > 0.05) {
-      final limbY = cy - radius; // punto más alto del círculo
-      final limbRect = Rect.fromLTWH(
-        cx - radius * 0.9,
-        limbY - radius * 0.12,
-        radius * 1.8,
-        radius * 0.22,
-      );
+    if (sunIntensity > 0.20) {
+      // era 0.05
+      final limbY = cy - radius;
       canvas.drawOval(
-        limbRect,
+        Rect.fromLTWH(
+          cx - radius * 0.85,
+          limbY - radius * 0.10,
+          radius * 1.7,
+          radius * 0.18,
+        ),
         Paint()
-          ..color = Colors.white.withOpacity(0.18 * sunIntensity)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12),
+          ..color = Colors.white
+              .withOpacity(0.10 * sunIntensity) // era 0.18
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
       );
     }
   }
@@ -269,10 +275,7 @@ class _DaySkyPainter extends CustomPainter {
     for (final (dx, dy, r) in circles) {
       canvas.drawCircle(Offset(x + dx * s, y + dy * s), r * s, p);
     }
-    canvas.drawRect(
-      Rect.fromLTRB(x - 32 * s, y, x + 32 * s, y + 13 * s),
-      p,
-    );
+    canvas.drawRect(Rect.fromLTRB(x - 32 * s, y, x + 32 * s, y + 13 * s), p);
   }
 
   @override

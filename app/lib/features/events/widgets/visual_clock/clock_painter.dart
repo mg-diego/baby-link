@@ -143,9 +143,7 @@ class ClockPainter extends CustomPainter {
       final cat = event['category'];
       final eventType = EventType.fromBackend(cat, event['metadata'] ?? {});
 
-      // SOLO dibujamos el arco si es siesta de día o desvelo de noche
-      final bool isRelevant = (isDayMode && cat == 'nap') || 
-                              (!isDayMode && cat == 'night_waking');
+      final bool isRelevant = (isDayMode && cat == 'nap') || (!isDayMode && cat == 'night_waking') || (cat == 'feed' && event['metadata']['type'] == 'nursing');
       
       if (!isRelevant) continue;
 

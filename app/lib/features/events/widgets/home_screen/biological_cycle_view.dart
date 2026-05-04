@@ -278,15 +278,16 @@ class BiologicalCycleView extends ConsumerWidget {
       final eventsMap = lastEventsAsync.asData?.value ?? {};
 
       String? isoString;
-      
+
       if (type == EventType.diaper) {
         final wet = eventsMap['diaper_wet'] as String?;
         final dirty = eventsMap['diaper_dirty'] as String?;
         final wetDate = wet != null ? DateTime.tryParse(wet) : null;
         final dirtyDate = dirty != null ? DateTime.tryParse(dirty) : null;
-        
+
         DateTime? latest = wetDate;
-        if (dirtyDate != null && (latest == null || dirtyDate.isAfter(latest))) {
+        if (dirtyDate != null &&
+            (latest == null || dirtyDate.isAfter(latest))) {
           latest = dirtyDate;
         }
         isoString = latest?.toIso8601String();
@@ -305,7 +306,7 @@ class BiologicalCycleView extends ConsumerWidget {
           default:
             key = type.backendCategory;
         }
-        
+
         isoString = eventsMap[key] as String?;
       }
 
@@ -329,58 +330,93 @@ class BiologicalCycleView extends ConsumerWidget {
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
+                      // ── Icono izquierda ──────────────────────────────────────────────
                       Align(
                         alignment: Alignment.centerLeft,
-                        child: IconButton(
-                          icon: Icon(
-                            Icons.person_outline_rounded,
-                            color: textColorSec,
-                            size: 18,
-                          ),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          onPressed: () {},
+                        child: _HeaderIconButton(
+                          icon: Icons.person_outline_rounded,
+                          isNightMode: isNightMode,
+                          onTap: () {},
                         ),
                       ),
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (babyName.isNotEmpty)
-                            Text(
-                              babyName,
-                              style: TextStyle(
+
+                      // ── Nombre + edad (pill con blur) ────────────────────────────────
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isNightMode
+                                  ? Colors.black.withOpacity(0.25)
+                                  : Colors.white.withOpacity(0.35),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
                                 color: isNightMode
-                                    ? Colors.white
-                                    : const Color(0xFF2D3142),
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.3,
+                                    ? Colors.white.withOpacity(0.08)
+                                    : Colors.white.withOpacity(0.55),
+                                width: 0.5,
                               ),
                             ),
-                          if (babyAge.isNotEmpty)
-                            Text(
-                              babyAge,
-                              style: TextStyle(
-                                color: isNightMode
-                                    ? Colors.white54
-                                    : const Color(0xFF546E7A),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (babyName.isNotEmpty)
+                                  Text(
+                                    babyName,
+                                    style: TextStyle(
+                                      color: isNightMode
+                                          ? Colors.white
+                                          : const Color(0xFF2D3142),
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.2,
+                                      shadows: [
+                                        Shadow(
+                                          color: Colors.black.withOpacity(
+                                            isNightMode ? 0.40 : 0.10,
+                                          ),
+                                          blurRadius: 8,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                if (babyAge.isNotEmpty)
+                                  Text(
+                                    babyAge,
+                                    style: TextStyle(
+                                      color: isNightMode
+                                          ? Colors.white.withOpacity(0.65)
+                                          : const Color(0xFF546E7A),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      shadows: [
+                                        Shadow(
+                                          color: Colors.black.withOpacity(
+                                            isNightMode ? 0.30 : 0.08,
+                                          ),
+                                          blurRadius: 6,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
                             ),
-                        ],
+                          ),
+                        ),
                       ),
+
+                      // ── Icono derecha ────────────────────────────────────────────────
                       Align(
                         alignment: Alignment.centerRight,
-                        child: IconButton(
-                          icon: Icon(
-                            Icons.calendar_today_rounded,
-                            color: textColorSec,
-                            size: 24,
-                          ),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          onPressed: onOpenHistorical,
+                        child: _HeaderIconButton(
+                          icon: Icons.calendar_today_rounded,
+                          isNightMode: isNightMode,
+                          onTap: onOpenHistorical,
                         ),
                       ),
                     ],
@@ -874,6 +910,48 @@ class BiologicalActionButton extends StatelessWidget {
         }
         return Text(timeStr, style: textStyle);
       },
+    );
+  }
+}
+
+class _HeaderIconButton extends StatelessWidget {
+  final IconData icon;
+  final bool isNightMode;
+  final VoidCallback onTap;
+
+  const _HeaderIconButton({
+    required this.icon,
+    required this.isNightMode,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: isNightMode
+              ? Colors.black.withOpacity(0.22)
+              : Colors.white.withOpacity(0.30),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: isNightMode
+                ? Colors.white.withOpacity(0.10)
+                : Colors.white.withOpacity(0.50),
+            width: 0.5,
+          ),
+        ),
+        child: Icon(
+          icon,
+          size: 20,
+          color: isNightMode
+              ? Colors.white.withOpacity(0.80)
+              : const Color(0xFF2D3142).withOpacity(0.70),
+        ),
+      ),
     );
   }
 }

@@ -21,6 +21,8 @@ class VisualClockView extends StatefulWidget {
   final Function(Map<String, dynamic>)? onTapEvent;
   final VoidCallback? onTapPrediction;
 
+  final AlignmentGeometry alignment;
+
   const VisualClockView({
     super.key,
     required this.events,
@@ -33,6 +35,7 @@ class VisualClockView extends StatefulWidget {
     this.biologicalCycleEnd,
     this.onTapEvent,
     this.onTapPrediction,
+    this.alignment = Alignment.center,
   });
 
   @override
@@ -66,6 +69,31 @@ class _VisualClockViewState extends State<VisualClockView>
     if (oldWidget.selectedDate != widget.selectedDate ||
         oldWidget.forceNightMode != widget.forceNightMode) {
       _checkInitialMode();
+    }
+  }
+
+  String _dayNightLabel() {
+    const months = [
+      'Enero',
+      'Febrero',
+      'Marzo',
+      'Abril',
+      'Mayo',
+      'Junio',
+      'Julio',
+      'Agosto',
+      'Septiembre',
+      'Octubre',
+      'Noviembre',
+      'Diciembre',
+    ];
+
+    if (_isDayMode) {
+      final d = widget.selectedDate;
+      return 'Día de ${d.day} ${months[d.month - 1]}';
+    } else {
+      final d = widget.selectedDate;
+      return 'Noche a ${d.day} ${months[d.month - 1]}';
     }
   }
 
@@ -166,7 +194,7 @@ class _VisualClockViewState extends State<VisualClockView>
     } else {
       DateTime? bedTime, woke;
 
-      for (var e in [...todayAsc, ...ydayDesc]) {
+      /* for (var e in [...todayAsc, ...ydayDesc]) {
         if (e['category'] == 'bed_time') {
           bedTime = DateTime.parse(e['start_time']).toLocal();
           break;
@@ -209,7 +237,44 @@ class _VisualClockViewState extends State<VisualClockView>
           end = start.add(const Duration(hours: 11, minutes: 30));
         }
         return (start: start, end: end);
+      }*/
+
+      // Noche histórica: bedtime viene de yesterdayEvents, woke_up de todayEvents
+
+      // Busca bedtime SOLO en yesterday (la noche empieza el día anterior)
+      for (var e in ydayDesc) {
+        if (e['category'] == 'bed_time') {
+          bedTime = DateTime.parse(e['start_time']).toLocal();
+          break;
+        }
       }
+
+      // Si no hay en yesterday, busca en today (algunos se registran tarde)
+      if (bedTime == null) {
+        for (var e in todayAsc) {
+          if (e['category'] == 'bed_time') {
+            bedTime = DateTime.parse(e['start_time']).toLocal();
+            break;
+          }
+        }
+      }
+
+      // woke_up viene de today
+      for (var e in todayAsc) {
+        if (e['category'] == 'woke_up') {
+          woke = DateTime.parse(e['start_time']).toLocal();
+          break;
+        }
+      }
+
+      final start = bedTime ?? DateTime(d.year, d.month, d.day - 1, 20, 30);
+      var end = woke ?? DateTime(d.year, d.month, d.day, 8, 0);
+
+      if (end.isBefore(start)) {
+        end = start.add(const Duration(hours: 11, minutes: 30));
+      }
+
+      return (start: start, end: end);
     }
   }
 
@@ -466,7 +531,8 @@ class _VisualClockViewState extends State<VisualClockView>
     const double sweepAngle = 5 * math.pi / 3;
     final double endAngle = startAngle + sweepAngle;
 
-    return Center(
+    return Align(
+      alignment: widget.alignment,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final size = math.min(constraints.maxWidth - 60, 280.0);
@@ -548,7 +614,7 @@ class _VisualClockViewState extends State<VisualClockView>
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              _isDayMode ? 'Día' : 'Noche',
+                              _dayNightLabel(),
                               style: const TextStyle(
                                 fontSize: 12,
                                 color: ClockPalette.textMuted,
@@ -584,7 +650,6 @@ class _VisualClockViewState extends State<VisualClockView>
                   final eventType = EventType.fromBackend(cat, meta);
                   final evStart = DateTime.parse(event['start_time']).toLocal();
 
-                  // Filtros de eventos invisibles según el modo
                   if (_isDayMode && cat == 'night_waking') {
                     return const SizedBox.shrink();
                   }
@@ -594,13 +659,12 @@ class _VisualClockViewState extends State<VisualClockView>
 
                   DateTime displayTime = evStart;
 
-                  // SOLO las siestas de día y los desvelos de noche tienen ventana temporal
                   final bool hasTemporalWindow =
                       (_isDayMode && cat == 'nap') ||
-                      (!_isDayMode && cat == 'night_waking');
+                      (!_isDayMode && cat == 'night_waking') ||
+                      (cat == 'feed' && meta['type'] == 'nursing');
 
                   if (hasTemporalWindow) {
-                    // Si está en curso, la ventana llega hasta el momento actual
                     final evEnd = event['end_time'] != null
                         ? DateTime.parse(event['end_time']).toLocal()
                         : DateTime.now();
@@ -612,11 +676,9 @@ class _VisualClockViewState extends State<VisualClockView>
 
                     if (!cs.isBefore(ce)) return const SizedBox.shrink();
 
-                    // Colocamos el icono exactamente en el centro de la duración
                     final visibleMins = ce.difference(cs).inMinutes;
                     displayTime = cs.add(Duration(minutes: visibleMins ~/ 2));
                   } else {
-                    // Para el resto de eventos (biberón, pañal, etc.), ignoramos la duración
                     if (evStart.isBefore(startTime) ||
                         evStart.isAfter(endTime)) {
                       return const SizedBox.shrink();

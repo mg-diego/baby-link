@@ -567,6 +567,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     if (_isHistoricalMode) {
       return HistoricalView(
         babyId: widget.babyId,
+        onBack: () => setState(() => _isHistoricalMode = false),
         onRefresh: () async {
           ref.read(eventActionProvider).refreshLists(widget.babyId);
         },
