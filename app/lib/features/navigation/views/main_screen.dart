@@ -177,7 +177,7 @@ class _CustomNavBar extends StatelessWidget {
                   Expanded(
                     child: _NavItem(
                       svgData: statsIcon,
-                      label: 'Stats',
+                      label: 'Estadísticas',
                       isSelected: selectedIndex == 4,
                       isDark: isDark,
                       onTap: () => onTap(4),

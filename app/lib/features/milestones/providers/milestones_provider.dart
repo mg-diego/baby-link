@@ -19,18 +19,29 @@ class MilestonesNotifier extends AsyncNotifier<List<Milestone>> {
   }
 
   Future<void> add(Milestone m) async {
-    state = AsyncData([...state.value ?? [], m]
-      ..sort((a, b) => a.date.compareTo(b.date)));
+    state = AsyncData(
+      [...?state.value, m]..sort((a, b) => a.date.compareTo(b.date)),
+    );
   }
 
   Future<void> remove(String id) async {
     await _service.delete(id);
-    state = AsyncData(
-      (state.value ?? []).where((m) => m.id != id).toList(),
-    );
+    final List<Milestone> currentList = state.value ?? [];
+    state = AsyncData(currentList.where((m) => m.id != id).toList());
+  }
+
+  Future<void> updateMilestone(Milestone updated) async {
+    final List<Milestone> list = [...?state.value];
+    final idx = list.indexWhere((m) => m.id == updated.id);
+    if (idx != -1) {
+      list[idx] = updated;
+      list.sort((a, b) => a.date.compareTo(b.date));
+      state = AsyncData(list);
+    }
   }
 }
 
 final milestonesProvider =
     AsyncNotifierProvider<MilestonesNotifier, List<Milestone>>(
-        MilestonesNotifier.new);
+      MilestonesNotifier.new,
+    );

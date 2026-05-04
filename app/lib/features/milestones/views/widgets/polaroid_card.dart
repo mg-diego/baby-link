@@ -1,17 +1,21 @@
 import 'dart:math' as math;
 import 'package:app/shared/models/milestone.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class PolaroidCard extends StatefulWidget {
   final Milestone milestone;
   final DateTime babyDob;
   final bool isLeft;
+  final VoidCallback? onViewImage;
 
   const PolaroidCard({
     super.key,
     required this.milestone,
     required this.babyDob,
     required this.isLeft,
+    this.onViewImage,
   });
 
   @override
@@ -31,9 +35,10 @@ class _PolaroidCardState extends State<PolaroidCard>
       vsync: this,
       duration: const Duration(milliseconds: 420),
     );
-    _anim = Tween<double>(begin: 0, end: math.pi).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOutCubic),
-    );
+    _anim = Tween<double>(
+      begin: 0,
+      end: math.pi,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOutCubic));
   }
 
   @override
@@ -43,18 +48,15 @@ class _PolaroidCardState extends State<PolaroidCard>
   }
 
   void _toggle() {
-    if (_flipped) {
-      _ctrl.reverse();
-    } else {
-      _ctrl.forward();
-    }
+    _flipped ? _ctrl.reverse() : _ctrl.forward();
     setState(() => _flipped = !_flipped);
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final rotation = widget.milestone.rotation;
+
+    final double fixedAngle = widget.isLeft ? -0.04 : 0.04;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -64,7 +66,7 @@ class _PolaroidCardState extends State<PolaroidCard>
         bottom: 12,
       ),
       child: Transform.rotate(
-        angle: rotation,
+        angle: fixedAngle,
         child: GestureDetector(
           onTap: _toggle,
           child: AnimatedBuilder(
@@ -91,6 +93,7 @@ class _PolaroidCardState extends State<PolaroidCard>
                     : _Front(
                         milestone: widget.milestone,
                         isDark: isDark,
+                        onViewImage: widget.onViewImage,
                       ),
               );
             },
@@ -106,11 +109,18 @@ class _PolaroidCardState extends State<PolaroidCard>
 class _Front extends StatelessWidget {
   final Milestone milestone;
   final bool isDark;
+  final VoidCallback? onViewImage;
 
-  const _Front({required this.milestone, required this.isDark});
+  const _Front({
+    required this.milestone,
+    required this.isDark,
+    this.onViewImage,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final cat = catFor(milestone.category);
+
     return Container(
       width: 148,
       decoration: BoxDecoration(
@@ -133,30 +143,29 @@ class _Front extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ── Foto ──────────────────────────────────────────────────────
-          ClipRRect(
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(4),
-              topRight: Radius.circular(4),
-            ),
-            child: SizedBox(
-              height: 138,
-              width: double.infinity,
-              child: milestone.mediaUrl != null
-                  ? Image.network(
-                      milestone.mediaUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _PhotoPlaceholder(
-                        emoji: milestone.emoji ?? catFor(milestone.category).emoji,
-                      ),
-                    )
-                  : _PhotoPlaceholder(
-                      emoji: milestone.emoji ?? catFor(milestone.category).emoji,
-                    ),
+          GestureDetector(
+            onTap: onViewImage,
+            child: ClipRRect(
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+              ),
+              child: SizedBox(
+                height: 138,
+                width: double.infinity,
+                child: milestone.mediaUrl != null
+                    ? CachedNetworkImage(
+                        imageUrl: milestone.mediaUrl!,
+                        fit: BoxFit.cover,
+                        memCacheWidth: 400,
+                        errorWidget: (context, url, error) => _PhotoPlaceholder(
+                          emoji: milestone.emoji ?? cat.emoji,
+                        ),
+                      )
+                    : _PhotoPlaceholder(emoji: milestone.emoji ?? cat.emoji),
+              ),
             ),
           ),
-
-          // ── Parte blanca (título) ─────────────────────────────────────
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
@@ -165,12 +174,11 @@ class _Front extends StatelessWidget {
               textAlign: TextAlign.center,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontFamily: 'PatrickHand', // fallback: sans-serif
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF2D2D2D),
-                height: 1.3,
+              style: GoogleFonts.caveat(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF2D2D2D),
+                height: 1.2,
               ),
             ),
           ),
@@ -180,6 +188,8 @@ class _Front extends StatelessWidget {
   }
 }
 
+// ─── Photo placeholder ─────────────────────────────────────────────────────────
+
 class _PhotoPlaceholder extends StatelessWidget {
   final String emoji;
   const _PhotoPlaceholder({required this.emoji});
@@ -188,9 +198,7 @@ class _PhotoPlaceholder extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       color: const Color(0xFFF0EDF8),
-      child: Center(
-        child: Text(emoji, style: const TextStyle(fontSize: 48)),
-      ),
+      child: Center(child: Text(emoji, style: const TextStyle(fontSize: 48))),
     );
   }
 }
@@ -209,16 +217,27 @@ class _Back extends StatelessWidget {
   });
 
   String _fmtDate(DateTime d) {
-    const m = [
-      'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
-      'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic',
+    const months = [
+      'Ene',
+      'Feb',
+      'Mar',
+      'Abr',
+      'May',
+      'Jun',
+      'Jul',
+      'Ago',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dic',
     ];
-    return '${d.day} ${m[d.month - 1]} ${d.year}';
+    return '${d.day} ${months[d.month - 1]} ${d.year}';
   }
 
   @override
   Widget build(BuildContext context) {
     final cat = catFor(milestone.category);
+
     return Container(
       width: 148,
       decoration: BoxDecoration(
@@ -289,15 +308,19 @@ class _Back extends StatelessWidget {
           // Fecha
           Row(
             children: [
-              const Icon(Icons.calendar_today_rounded,
-                  size: 11, color: Color(0xFF999999)),
+              const Icon(
+                Icons.calendar_today_rounded,
+                size: 11,
+                color: Color(0xFF999999),
+              ),
               const SizedBox(width: 4),
               Text(
                 _fmtDate(milestone.date),
                 style: const TextStyle(
-                    fontSize: 10,
-                    color: Color(0xFF999999),
-                    fontWeight: FontWeight.w600),
+                  fontSize: 10,
+                  color: Color(0xFF999999),
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),

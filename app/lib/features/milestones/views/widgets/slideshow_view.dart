@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:app/shared/models/milestone.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -74,8 +75,20 @@ class _SlideshowViewState extends State<SlideshowView>
   }
 
   String _fmtDate(DateTime d) {
-    const m = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
-                'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const m = [
+      'Enero',
+      'Febrero',
+      'Marzo',
+      'Abril',
+      'Mayo',
+      'Junio',
+      'Julio',
+      'Agosto',
+      'Septiembre',
+      'Octubre',
+      'Noviembre',
+      'Diciembre',
+    ];
     return '${d.day} de ${m[d.month - 1]} de ${d.year}';
   }
 
@@ -102,11 +115,15 @@ class _SlideshowViewState extends State<SlideshowView>
 
           // ── Top bar ────────────────────────────────────────────────────
           Positioned(
-            top: 0, left: 0, right: 0,
+            top: 0,
+            left: 0,
+            right: 0,
             child: SafeArea(
               child: Padding(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 20, vertical: 12),
+                  horizontal: 20,
+                  vertical: 12,
+                ),
                 child: Row(
                   children: [
                     // Progress indicators
@@ -134,13 +151,17 @@ class _SlideshowViewState extends State<SlideshowView>
                     GestureDetector(
                       onTap: () => Navigator.pop(context),
                       child: Container(
-                        width: 32, height: 32,
+                        width: 32,
+                        height: 32,
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.40),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.close_rounded,
-                            color: Colors.white, size: 16),
+                        child: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white,
+                          size: 16,
+                        ),
                       ),
                     ),
                   ],
@@ -151,7 +172,9 @@ class _SlideshowViewState extends State<SlideshowView>
 
           // ── Bottom: play/pause + nav ───────────────────────────────────
           Positioned(
-            bottom: 0, left: 0, right: 0,
+            bottom: 0,
+            left: 0,
+            right: 0,
             child: SafeArea(
               child: Padding(
                 padding: const EdgeInsets.all(24),
@@ -179,10 +202,7 @@ class _SlideshowViewState extends State<SlideshowView>
                       onTap: _togglePlay,
                     ),
                     const SizedBox(width: 20),
-                    _CircleBtn(
-                      icon: Icons.skip_next_rounded,
-                      onTap: _advance,
-                    ),
+                    _CircleBtn(icon: Icons.skip_next_rounded, onTap: _advance),
                   ],
                 ),
               ),
@@ -214,13 +234,15 @@ class _Slide extends StatelessWidget {
       children: [
         // Foto de fondo
         if (milestone.mediaUrl != null)
-          Image.network(milestone.mediaUrl!, fit: BoxFit.cover)
+          CachedNetworkImage(imageUrl: milestone.mediaUrl!, fit: BoxFit.cover)
         else
           Container(
             color: const Color(0xFF1A1D2E),
             child: Center(
-              child: Text(milestone.emoji ?? cat.emoji,
-                  style: const TextStyle(fontSize: 100)),
+              child: Text(
+                milestone.emoji ?? cat.emoji,
+                style: const TextStyle(fontSize: 100),
+              ),
             ),
           ),
 
@@ -264,9 +286,10 @@ class _Slide extends StatelessWidget {
                   if (milestone.mediaUrl != null)
                     ClipRRect(
                       borderRadius: BorderRadius.circular(2),
-                      child: Image.network(
-                        milestone.mediaUrl!,
-                        height: 200, width: double.infinity,
+                      child: CachedNetworkImage(
+                        imageUrl: milestone.mediaUrl!,
+                        height: 200,
+                        width: double.infinity,
                         fit: BoxFit.cover,
                       ),
                     )
@@ -275,8 +298,10 @@ class _Slide extends StatelessWidget {
                       height: 200,
                       color: const Color(0xFFF0EDF8),
                       child: Center(
-                        child: Text(milestone.emoji ?? cat.emoji,
-                            style: const TextStyle(fontSize: 64)),
+                        child: Text(
+                          milestone.emoji ?? cat.emoji,
+                          style: const TextStyle(fontSize: 64),
+                        ),
                       ),
                     ),
                   Padding(
@@ -299,11 +324,16 @@ class _Slide extends StatelessWidget {
 
         // Info abajo
         Positioned(
-          left: 24, right: 24, bottom: 110,
+          left: 24,
+          right: 24,
+          bottom: 110,
           child: Column(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(12),
@@ -311,9 +341,10 @@ class _Slide extends StatelessWidget {
                 child: Text(
                   '${cat.emoji} ${cat.label}',
                   style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600),
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
@@ -361,7 +392,8 @@ class _CircleBtn extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: size, height: size,
+        width: size,
+        height: size,
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.18),
           shape: BoxShape.circle,

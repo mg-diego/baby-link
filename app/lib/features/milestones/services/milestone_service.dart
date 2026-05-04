@@ -32,29 +32,72 @@ class MilestoneService {
 
     if (mediaFile != null) {
       final ext = p.extension(mediaFile.path);
-      final path =
-          '$babyId/${DateTime.now().millisecondsSinceEpoch}$ext';
+      final path = '$babyId/${DateTime.now().millisecondsSinceEpoch}$ext';
       await _db.storage.from('milestones').upload(path, mediaFile);
       mediaUrl = _db.storage.from('milestones').getPublicUrl(path);
     }
 
-    final row = await _db.from('milestones').insert({
-      'baby_id': babyId,
-      'title': title,
-      'description': description,
-      'date': '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
-      'category': category,
-      'subcategory': subcategory,
-      'media_url': mediaUrl,
-      'media_type': mediaType,
-      'emoji': emoji,
-      'metadata': metadata,
-    }).select().single();
+    final row = await _db
+        .from('milestones')
+        .insert({
+          'baby_id': babyId,
+          'title': title,
+          'description': description,
+          'date':
+              '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
+          'category': category,
+          'subcategory': subcategory,
+          'media_url': mediaUrl,
+          'media_type': mediaType,
+          'emoji': emoji,
+          'metadata': metadata,
+        })
+        .select()
+        .single();
 
     return Milestone.fromJson(row);
   }
 
   Future<void> delete(String id) async {
     await _db.from('milestones').delete().eq('id', id);
+  }
+
+  Future<Milestone> update({
+    required String id,
+    required String title,
+    String? description,
+    required DateTime date,
+    required String category,
+    File? newMediaFile,
+    String? existingMediaUrl,
+    String mediaType = 'none',
+    String? emoji,
+  }) async {
+    String? mediaUrl = existingMediaUrl;
+
+    if (newMediaFile != null) {
+      final ext = p.extension(newMediaFile.path);
+      final path = '${DateTime.now().millisecondsSinceEpoch}$ext';
+      await _db.storage.from('milestones').upload(path, newMediaFile);
+      mediaUrl = _db.storage.from('milestones').getPublicUrl(path);
+    }
+
+    final row = await _db
+        .from('milestones')
+        .update({
+          'title': title,
+          'description': description,
+          'date':
+              '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
+          'category': category,
+          if (mediaUrl != null) 'media_url': mediaUrl,
+          'media_type': mediaType,
+          'emoji': emoji,
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+    return Milestone.fromJson(row);
   }
 }
