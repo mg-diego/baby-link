@@ -52,42 +52,64 @@ class PredictionService:
 
         events_asc = sorted(events, key=lambda x: x['start_time'])
 
-        morning_ww, evening_ww, day_ww, nap_lengths, wake_hours = [], [], [], [], []
-        feed_anchors = []
-        
+        morning_ww, evening_ww, day_ww, nap_lengths, wake_hours, feed_anchors = [], [], [], [], [], []
         last_wake = None
         is_first_nap_of_day = False
+
+        now_utc = datetime.utcnow()
+        cutoff_today = now_utc - timedelta(hours=22)
+        morning_wake_today = None
+        last_wake_time = None
+        naps_taken_today = 0
+        ongoing_nap_start = None
+        todays_nap_duration = 0
 
         for ev in events_asc:
             start = self._parse_utc(ev['start_time'])
             end_time_str = ev.get('end_time')
             end = self._parse_utc(end_time_str) if end_time_str else None
             cat = ev['category']
+            is_today = start >= cutoff_today
 
             if cat == 'woke_up':
                 last_wake, is_first_nap_of_day = start, True
-                wake_hours.append(start.hour + start.minute/60)
+                wake_hours.append(start.hour + start.minute / 60)
+                if is_today:
+                    morning_wake_today = start
+                    last_wake_time = start
+                    naps_taken_today = 0
+                    ongoing_nap_start = None
+                    todays_nap_duration = 0
             elif cat == 'nap':
                 if last_wake:
                     ww = (start - last_wake).total_seconds() / 60
                     if 60 < ww < 480:
                         (morning_ww if is_first_nap_of_day else day_ww).append(ww)
                 if end:
-                    nap_lengths.append((end - start).total_seconds() / 60)
+                    nap_duration = (end - start).total_seconds() / 60
+                    nap_lengths.append(nap_duration)
                     last_wake, is_first_nap_of_day = end, False
+                    if is_today:
+                        last_wake_time = end
+                        ongoing_nap_start = None
+                        todays_nap_duration += nap_duration
                 else:
                     last_wake = None
+                    if is_today:
+                        ongoing_nap_start = start
+                if is_today:
+                    naps_taken_today += 1
             elif cat == 'bedtime' and last_wake:
                 ww = (start - last_wake).total_seconds() / 60
-                if 60 < ww < 480: evening_ww.append(ww)
+                if 60 < ww < 480:
+                    evening_ww.append(ww)
                 last_wake = None
-            elif cat == 'bottle' or cat == 'nursing':
-                feed_anchors.append(start.hour + start.minute/60)
+            elif cat in ('bottle', 'nursing'):
+                feed_anchors.append(start.hour + start.minute / 60)
 
         max_naps_allowed = self._get_max_naps(baby_info['dob'])
-
         defaults = {
-            0: (300, 300, 360, 0),    
+            0: (300, 300, 360, 0),  
             1: (270, 300, 330, 120),  
             2: (150, 180, 210, 90),   
             3: (120, 150, 150, 60),   
@@ -113,30 +135,18 @@ class PredictionService:
             "feed_anchors": sorted(feed_anchors)
         }
 
-        now_utc = datetime.utcnow()
-        cutoff_today = now_utc - timedelta(hours=22)
-        morning_wake_today = None
-        last_wake_time = None
-        naps_taken_today = 0
+        if ongoing_nap_start:
+            last_wake_time = ongoing_nap_start + timedelta(minutes=profile['nap_base'])
 
-        for ev in events_asc:
-            start = self._parse_utc(ev['start_time'])
-            if start < cutoff_today:
-                continue
-                
-            cat = ev['category']
-            if cat == 'woke_up':
-                morning_wake_today = start
-                last_wake_time = start
-                naps_taken_today = 0
-            elif cat == 'nap':
-                end_time_str = ev.get('end_time')
-                end = self._parse_utc(end_time_str) if end_time_str else None
-                if end:
-                    last_wake_time = end
-                else:
-                    last_wake_time = start + timedelta(minutes=profile['nap_base'])
-                naps_taken_today += 1
+        expected_daily_sleep = profile['nap_base'] * naps_taken_today
+        if naps_taken_today > 0 and todays_nap_duration > 0:
+            deficit = expected_daily_sleep - todays_nap_duration
+            if deficit > 15:
+                compensation = deficit * 0.85
+                min_evening_ww = profile['ww_evening'] * 0.60
+                profile['ww_evening'] = max(min_evening_ww, profile['ww_evening'] - compensation)
+                min_day_ww = profile['ww_day'] * 0.60
+                profile['ww_day'] = max(min_day_ww, profile['ww_day'] - compensation)
 
         return self._generate_timeline(profile, morning_wake_today, last_wake_time, naps_taken_today)
     
@@ -264,7 +274,9 @@ class PredictionService:
                 ww_current = p['ww_evening'] 
                 pure_bed = curr + timedelta(minutes=ww_current)
                 
-                if pure_bed < target_bed - timedelta(minutes=80):
+                rescue_margin = 150 if p['max_naps'] <= 2 else 80
+                
+                if pure_bed < target_bed - timedelta(minutes=rescue_margin):
                     next_nap_start = curr + timedelta(minutes=p['ww_day'] * 0.85) 
                     next_nap_end = next_nap_start + timedelta(minutes=30) 
                     
@@ -281,7 +293,19 @@ class PredictionService:
 
                 diff_seconds = (target_bed - pure_bed).total_seconds()
                 
-                blend_factor = 0.75 if p['max_naps'] <= 2 else 0.40
+                if p['max_naps'] >= 4:
+                    blend_factor = 0.0
+                elif p['max_naps'] == 3:
+                    blend_factor = 0.10
+                elif p['max_naps'] == 2:
+                    blend_factor = 0.25
+                elif p['max_naps'] == 1:
+                    blend_factor = 0.40
+                else:
+                    blend_factor = 0.60
+                
+                if abs(diff_seconds) > 1800: 
+                    blend_factor *= 0.15 
                 
                 final_bed = pure_bed + timedelta(seconds=diff_seconds * blend_factor)
                 
