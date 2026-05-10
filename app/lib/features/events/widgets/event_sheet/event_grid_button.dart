@@ -30,6 +30,23 @@ class EventGridButton extends StatelessWidget {
         type == EventType.diaper;
   }
 
+  // --- NUEVO: Extractor inteligente que prioriza end_time ---
+  String? _extractBestTime(dynamic eventData) {
+    if (eventData == null) return null;
+    
+    // Si el provider devuelve el objeto completo del evento
+    if (eventData is Map) {
+      return eventData['end_time'] as String? ?? eventData['start_time'] as String?;
+    }
+    
+    // Si el provider devuelve solo el string de la fecha (comportamiento legacy)
+    if (eventData is String) {
+      return eventData;
+    }
+    
+    return null;
+  }
+
   String _formatTime(String? isoString, {bool short = false}) {
     if (isoString == null) return '--';
     final date = DateTime.tryParse(isoString)?.toLocal();
@@ -115,12 +132,13 @@ class EventGridButton extends StatelessWidget {
                     child: lastEventsAsync.when(
                       data: (eventsMap) {
                         if (eventType == EventType.diaper) {
+                          // Usamos el extractor para buscar la mejor hora
                           final wetTime = _formatTime(
-                            eventsMap['diaper_wet'],
+                            _extractBestTime(eventsMap['diaper_wet']),
                             short: true,
                           );
                           final dirtyTime = _formatTime(
-                            eventsMap['diaper_dirty'],
+                            _extractBestTime(eventsMap['diaper_dirty']),
                             short: true,
                           );
 
@@ -180,8 +198,9 @@ class EventGridButton extends StatelessWidget {
                                     ? 'solids'
                                     : eventType.backendCategory;
 
+                        // Extraemos la mejor hora del resto de eventos
                         return Text(
-                          _formatTime(eventsMap[key], short: true),
+                          _formatTime(_extractBestTime(eventsMap[key]), short: true),
                           style: TextStyle(
                             fontSize: 9,
                             color: Theme.of(context)

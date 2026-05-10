@@ -186,10 +186,11 @@ class BiologicalCycleView extends ConsumerWidget {
     DateTime? lastBedTime;
 
     for (var ev in allEvents) {
-      if (ev['category'] == 'woke_up' && lastWokeUp == null) {
+      final cat = ev['category'];
+      if (cat == 'woke_up' && lastWokeUp == null) {
         lastWokeUp = DateTime.parse(ev['start_time']).toLocal();
       }
-      if (ev['category'] == 'bed_time' && lastBedTime == null) {
+      if ((cat == 'bedtime' || cat == 'bed_time') && lastBedTime == null) {
         lastBedTime = DateTime.parse(ev['start_time']).toLocal();
       }
     }
@@ -321,7 +322,6 @@ class BiologicalCycleView extends ConsumerWidget {
           SafeArea(
             child: Column(
               children: [
-                // ── Header ──────────────────────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 20,
@@ -330,7 +330,6 @@ class BiologicalCycleView extends ConsumerWidget {
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      // ── Icono izquierda ──────────────────────────────────────────────
                       Align(
                         alignment: Alignment.centerLeft,
                         child: _HeaderIconButton(
@@ -339,8 +338,6 @@ class BiologicalCycleView extends ConsumerWidget {
                           onTap: () {},
                         ),
                       ),
-
-                      // ── Nombre + edad (pill con blur) ────────────────────────────────
                       ClipRRect(
                         borderRadius: BorderRadius.circular(20),
                         child: BackdropFilter(
@@ -409,8 +406,6 @@ class BiologicalCycleView extends ConsumerWidget {
                           ),
                         ),
                       ),
-
-                      // ── Icono derecha ────────────────────────────────────────────────
                       Align(
                         alignment: Alignment.centerRight,
                         child: _HeaderIconButton(
@@ -422,8 +417,6 @@ class BiologicalCycleView extends ConsumerWidget {
                     ],
                   ),
                 ),
-
-                // ── Date pill ───────────────────────────────────────────────
                 Container(
                   margin: const EdgeInsets.only(bottom: 36),
                   padding: const EdgeInsets.symmetric(
@@ -456,10 +449,7 @@ class BiologicalCycleView extends ConsumerWidget {
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 8),
-
-                // ── Clock ────────────────────────────────────────────────────
                 Expanded(
                   child: VisualClockView(
                     events: List<Map<String, dynamic>>.from(todayEvents),
@@ -476,8 +466,6 @@ class BiologicalCycleView extends ConsumerWidget {
                     onTapPrediction: onTapPrediction,
                   ),
                 ),
-
-                // ── Quick-action bar ─────────────────────────────────────────
                 Container(
                   margin: const EdgeInsets.only(
                     top: 24,
@@ -576,10 +564,8 @@ class BiologicalCycleView extends ConsumerWidget {
                     ),
                   ),
                 ),
-
                 SizedBox(
-                  height:
-                      150, // altura de un banner (~76px contenido + 12px padding vertical)
+                  height: 150,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -595,16 +581,6 @@ class BiologicalCycleView extends ConsumerWidget {
                         .toList(),
                   ),
                 ),
-                /*
-                // ── Ongoing event banners ────────────────────────────────────
-                ...ongoingEvents.map(
-                  (e) => OngoingEventBanner(
-                    event: e,
-                    isNightMode: isNightMode,
-                    onTap: () => onTapEvent(e),
-                    onStop: () => onStopEvent(e),
-                  ),
-                ),*/
               ],
             ),
           ),
@@ -614,7 +590,6 @@ class BiologicalCycleView extends ConsumerWidget {
   }
 }
 
-// ... EL ONGOING EVENT BANNER SE MANTIENE IGUAL ...
 class OngoingEventBanner extends StatelessWidget {
   final Map<String, dynamic> event;
   final bool isNightMode;

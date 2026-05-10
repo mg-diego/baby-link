@@ -42,7 +42,6 @@ class EventLoggerSheet extends ConsumerWidget {
         babyId: babyId,
         eventType: eventType,
         onSuccess: () {
-          // Solo cerramos el menú Grid cuando la acción haya terminado con éxito
           Navigator.pop(context);
           actionService.refreshLists(babyId);
         },
@@ -54,14 +53,44 @@ class EventLoggerSheet extends ConsumerWidget {
     final isStoppingNursing =
         eventType == EventType.nursing && activeNursing != null;
 
-    // Helper unificado para guardar, cerrar ambas capas (Formulario y Grid) y notificar
+    String? lastMilkType;
+    if (eventType == EventType.bottle) {
+      final lastEventsAsync = ref.read(lastEventsProvider(babyId));
+      if (lastEventsAsync.hasValue) {
+        final now = DateTime.now();
+        final todayArgs = (
+          babyId: babyId,
+          date: DateTime(now.year, now.month, now.day),
+        );
+        final yesterdayArgs = (
+          babyId: babyId,
+          date: DateTime(
+            now.year,
+            now.month,
+            now.day,
+          ).subtract(const Duration(days: 1)),
+        );
+        
+        final todayEvents = ref.read(dailyEventsProvider(todayArgs)).value ?? [];
+        final yesterdayEvents = ref.read(dailyEventsProvider(yesterdayArgs)).value ?? [];
+        
+        final allEvents = [...todayEvents, ...yesterdayEvents]
+          ..sort((a, b) => DateTime.parse(b['start_time']).compareTo(DateTime.parse(a['start_time'])));
+          
+        final lastBottleEvent = allEvents.where((e) => e['category'] == 'feed' && e['metadata']?['type'] == 'bottle').firstOrNull;
+        if (lastBottleEvent != null) {
+            lastMilkType = lastBottleEvent['metadata']?['milk_type'];
+        }
+      }
+    }
+
     void executeAndClose(
       BuildContext formCtx,
       Future<void> Function() action,
       String successMessage,
     ) async {
-      Navigator.pop(formCtx); // Cierra el formulario activo
-      Navigator.pop(context); // Cierra el menú Grid que quedó debajo
+      Navigator.pop(formCtx);
+      Navigator.pop(context);
 
       try {
         await action();
@@ -71,7 +100,6 @@ class EventLoggerSheet extends ConsumerWidget {
       }
     }
 
-    // Mostramos el formulario por encima de la cuadrícula
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -177,6 +205,7 @@ class EventLoggerSheet extends ConsumerWidget {
                 )
               else if (eventType == EventType.bottle)
                 BottleForm(
+                  lastMilkType: lastMilkType,
                   onSave: (meta, time) => executeAndClose(
                     ctx,
                     () => actionService.logEvent(

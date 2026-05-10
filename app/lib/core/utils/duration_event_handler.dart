@@ -52,12 +52,15 @@ class DurationEventHandler {
     StateNotifierProvider<ActiveEventNotifier, ActiveEvent?> provider,
     VoidCallback onSuccess,
   ) async {
-    final selectedStartTime = await showModalBottomSheet<DateTime>(
+    final result = await showModalBottomSheet<Map<String, DateTime>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
-        DateTime tempTime = DateTime.now();
+        DateTime tempStartTime = DateTime.now();
+        // Empezamos con la hora de fin nula (vacía)
+        DateTime? tempEndTime;
+
         return Container(
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
@@ -71,6 +74,9 @@ class DurationEventHandler {
           ),
           child: StatefulBuilder(
             builder: (BuildContext context, StateSetter setModalState) {
+              // Es válido SOLO si hay hora de fin Y no es anterior a la de inicio
+              final isValidEnd = tempEndTime != null && !tempEndTime!.isBefore(tempStartTime);
+
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -84,33 +90,160 @@ class DurationEventHandler {
                     ),
                   ),
                   Text(
-                    'Iniciar ${eventType.uiLabel}',
+                    'Registrar ${eventType.uiLabel}',
                     style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 20),
-                  CustomTimePicker(
-                    time: tempTime,
-                    onTimeChanged: (newTime) =>
-                        setModalState(() => tempTime = newTime),
+                  
+                  // --- HORA DE INICIO ---
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Hora de inicio',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ),
+                  const SizedBox(height: 8),
+                  CustomTimePicker(
+                    time: tempStartTime,
+                    onTimeChanged: (newTime) {
+                      setModalState(() {
+                        tempStartTime = newTime;
+                        // Si ya habían puesto hora de fin y ahora queda por detrás del inicio, la empujamos
+                        if (tempEndTime != null && tempEndTime!.isBefore(tempStartTime)) {
+                          tempEndTime = tempStartTime.add(const Duration(minutes: 30));
+                        }
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 20),
+
+                  // --- HORA DE FIN (Opcional) ---
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Hora de fin (Opcional)',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      // Botón para limpiar la hora si se arrepienten
+                      if (tempEndTime != null)
+                        GestureDetector(
+                          onTap: () => setModalState(() => tempEndTime = null),
+                          child: const Text(
+                            'Borrar',
+                            style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  
+                  // Estado vacío vs Selector activo
+                  if (tempEndTime == null)
+                    InkWell(
+                      onTap: () {
+                        setModalState(() {
+                          tempEndTime = tempStartTime.add(const Duration(minutes: 30));
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 20),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.grey.withOpacity(0.3),
+                            style: BorderStyle.solid,
+                          ),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.add_circle_outline_rounded, color: Colors.grey, size: 20),
+                            SizedBox(width: 8),
+                            Text(
+                              'Añadir hora de fin',
+                              style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    CustomTimePicker(
+                      time: tempEndTime!,
+                      onTimeChanged: (newTime) =>
+                          setModalState(() => tempEndTime = newTime),
+                    ),
+                  
+                  // Mensaje de error si la pusieron mal
+                  if (tempEndTime != null && !isValidEnd)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 12.0),
+                      child: Text(
+                        'La hora de fin no puede ser anterior al inicio',
+                        style: TextStyle(color: Colors.red, fontSize: 12),
+                      ),
+                    ),
+                    
                   const SizedBox(height: 30),
+                  
+                  // --- BOTONES DE ACCIÓN ---
                   SizedBox(
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton(
-                      onPressed: () => Navigator.pop(ctx, tempTime),
+                      // Se deshabilita pasándole 'null' si isValidEnd es falso
+                      onPressed: isValidEnd
+                          ? () {
+                              Navigator.pop(ctx, {
+                                'start': tempStartTime,
+                                'end': tempEndTime!
+                              });
+                            }
+                          : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.teal,
                         foregroundColor: Colors.white,
+                        disabledBackgroundColor: Colors.grey.shade300,
+                        disabledForegroundColor: Colors.grey.shade500,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                       child: const Text(
-                        'Guardar inicio',
+                        'Guardar evento finalizado',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: OutlinedButton(
+                      onPressed: () {
+                        // Aquí mandamos el 'start' y forzamos el 'end' a null
+                        Navigator.pop(ctx, {'start': tempStartTime});
+                      },
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.teal,
+                        side: const BorderSide(color: Colors.teal, width: 1.5),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Solo iniciar evento',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -126,7 +259,10 @@ class DurationEventHandler {
       },
     );
 
-    if (selectedStartTime == null) return;
+    if (result == null || result['start'] == null) return;
+
+    final selectedStartTime = result['start']!;
+    final selectedEndTime = result['end'];
 
     try {
       Map<String, dynamic> metadata = {};
@@ -155,7 +291,23 @@ class DurationEventHandler {
       );
 
       final eventId = response['id'] ?? response['data']?['id'];
-      ref.read(provider.notifier).start(eventId.toString(), selectedStartTime);
+
+      if (selectedEndTime != null) {
+        await ApiService.updateEvent(eventId.toString(), {
+          'end_time': selectedEndTime.toUtc().toIso8601String(),
+        });
+        
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${eventType.uiLabel} registrado correctamente'),
+            ),
+          );
+        }
+      } else {
+        ref.read(provider.notifier).start(eventId.toString(), selectedStartTime);
+      }
+      
       onSuccess();
     } catch (e) {
       if (context.mounted) {
@@ -165,7 +317,7 @@ class DurationEventHandler {
       }
     }
   }
-
+  
   static Future<void> _stopEvent(
     BuildContext context,
     WidgetRef ref,

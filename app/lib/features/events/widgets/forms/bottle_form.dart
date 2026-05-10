@@ -5,12 +5,14 @@ class BottleForm extends StatefulWidget {
   final Function(Map<String, dynamic>, DateTime) onSave;
   final Map<String, dynamic>? initialMetadata;
   final DateTime? initialTime;
+  final String? lastMilkType;
   
   const BottleForm({
     super.key, 
     required this.onSave,
     this.initialMetadata,
     this.initialTime,
+    this.lastMilkType,
   });
   
   @override
@@ -29,7 +31,7 @@ class _BottleFormState extends State<BottleForm> {
     _time = widget.initialTime ?? DateTime.now();
     final initialAmount = widget.initialMetadata?['amount_ml']?.toString() ?? '';
     _amount = TextEditingController(text: initialAmount == '0' ? '' : initialAmount);
-    _type = widget.initialMetadata?['milk_type'] ?? 'Fórmula';
+    _type = widget.initialMetadata?['milk_type'] ?? widget.lastMilkType ?? 'Fórmula';
     _notes = TextEditingController(text: widget.initialMetadata?['notes'] ?? '');
   }
 

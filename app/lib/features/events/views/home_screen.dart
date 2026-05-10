@@ -327,6 +327,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final isStoppingNursing =
         eventType == EventType.nursing && activeNursing != null;
 
+    // Extraer el último tipo de leche para el biberón
+    String? lastMilkType;
+    if (eventType == EventType.bottle) {
+      final now = DateTime.now();
+      final todayArgs = (
+        babyId: widget.babyId,
+        date: DateTime(now.year, now.month, now.day),
+      );
+      final yesterdayArgs = (
+        babyId: widget.babyId,
+        date: DateTime(
+          now.year,
+          now.month,
+          now.day,
+        ).subtract(const Duration(days: 1)),
+      );
+
+      final todayEvents = ref.read(dailyEventsProvider(todayArgs)).value ?? [];
+      final yesterdayEvents = ref.read(dailyEventsProvider(yesterdayArgs)).value ?? [];
+
+      final allEvents = [...todayEvents, ...yesterdayEvents]
+        ..sort((a, b) => DateTime.parse(b['start_time'])
+            .compareTo(DateTime.parse(a['start_time'])));
+
+      final lastBottleEvent = allEvents
+          .where((e) =>
+              e['category'] == 'feed' && e['metadata']?['type'] == 'bottle')
+          .firstOrNull;
+          
+      if (lastBottleEvent != null) {
+        lastMilkType = lastBottleEvent['metadata']?['milk_type'];
+      }
+    }
+
     void saveAndClose(Map<String, dynamic> meta, DateTime time) async {
       Navigator.pop(context);
       try {
@@ -438,7 +472,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               else if (eventType == EventType.bedtime)
                 BedtimeForm(onSave: saveAndClose)
               else if (eventType == EventType.bottle)
-                BottleForm(onSave: saveAndClose)
+                BottleForm(
+                  lastMilkType: lastMilkType,
+                  onSave: saveAndClose,
+                )
               else if (eventType == EventType.nursing)
                 NursingForm(
                   onSave: (meta, time, [end]) async {
