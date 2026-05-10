@@ -156,16 +156,12 @@ class _VisualClockViewState extends State<VisualClockView>
   ({DateTime start, DateTime end}) _computeRange() {
     final todayAsc = List<Map<String, dynamic>>.from(widget.events)
       ..sort((a, b) => a['start_time'].compareTo(b['start_time']));
-    final ydayDesc = List<Map<String, dynamic>>.from(widget.yesterdayEvents)
+    
+    // Lista combinada para buscar de forma más segura el último bedtime
+    final allEventsDesc = [...widget.yesterdayEvents, ...widget.events]
       ..sort((a, b) => b['start_time'].compareTo(a['start_time']));
 
     final d = widget.selectedDate;
-    final today = DateTime(
-      DateTime.now().year,
-      DateTime.now().month,
-      DateTime.now().day,
-    );
-    final isToday = widget.selectedDate == today;
 
     if (_isDayMode) {
       DateTime? wokeUp, bedTime;
@@ -194,68 +190,11 @@ class _VisualClockViewState extends State<VisualClockView>
     } else {
       DateTime? bedTime, woke;
 
-      /* for (var e in [...todayAsc, ...ydayDesc]) {
+      // Buscar el bed_time más reciente (en todos los eventos combinados)
+      for (var e in allEventsDesc) {
         if (e['category'] == 'bed_time') {
           bedTime = DateTime.parse(e['start_time']).toLocal();
           break;
-        }
-      }
-
-      if (isToday || widget.forceNightMode != null) {
-        final start =
-            bedTime ??
-            DateTime(
-              DateTime.now().year,
-              DateTime.now().month,
-              DateTime.now().day,
-              20,
-              0,
-            ).subtract(const Duration(days: 1));
-        final end =
-            widget.biologicalCycleEnd ??
-            widget.wakePrediction?.start ??
-            start.add(const Duration(hours: 11));
-        return (start: start, end: end);
-      } else {
-        for (var e in todayAsc) {
-          if (e['category'] == 'woke_up') {
-            woke = DateTime.parse(e['start_time']).toLocal();
-            break;
-          }
-        }
-        final start =
-            bedTime ??
-            DateTime(
-              d.year,
-              d.month,
-              d.day,
-              20,
-              30,
-            ).subtract(const Duration(days: 1));
-        var end = woke ?? DateTime(d.year, d.month, d.day, 8, 0);
-        if (end.isBefore(start)) {
-          end = start.add(const Duration(hours: 11, minutes: 30));
-        }
-        return (start: start, end: end);
-      }*/
-
-      // Noche histórica: bedtime viene de yesterdayEvents, woke_up de todayEvents
-
-      // Busca bedtime SOLO en yesterday (la noche empieza el día anterior)
-      for (var e in ydayDesc) {
-        if (e['category'] == 'bed_time') {
-          bedTime = DateTime.parse(e['start_time']).toLocal();
-          break;
-        }
-      }
-
-      // Si no hay en yesterday, busca en today (algunos se registran tarde)
-      if (bedTime == null) {
-        for (var e in todayAsc) {
-          if (e['category'] == 'bed_time') {
-            bedTime = DateTime.parse(e['start_time']).toLocal();
-            break;
-          }
         }
       }
 
