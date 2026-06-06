@@ -283,6 +283,24 @@ class DurationEventHandler {
         }
       }
 
+      if (eventType == EventType.bedtime) {
+        final predictions = ref
+            .read(sleepPredictionProvider(babyId))
+            .asData
+            ?.value;
+
+        final bedTimePrediction = predictions
+            ?.where((p) => p.isBedtime)
+            .firstOrNull;
+
+        if (bedTimePrediction != null) {
+          metadata = {
+            ...metadata,
+            'predicted_start_time': bedTimePrediction.start.toIso8601String(),
+          };
+        }
+      }
+
       final response = await ApiService.registerEvent(
         babyId,
         eventType.backendCategory,
