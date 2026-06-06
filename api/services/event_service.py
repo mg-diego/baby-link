@@ -142,8 +142,6 @@ class EventService:
             raise HTTPException(status_code=400, detail=f"Diaper debe tener condition: {valid_conditions}")
 
     def _validate_medicine_metadata(self, metadata: dict):
-        # Aceptamos que venga solo con 'notes' (por el formulario temporal de Flutter)
-        # O que venga con los datos completos estrictos.
         has_strict_fields = all(k in metadata for k in ('name', 'dose_amount', 'dose_unit'))
         has_notes = 'notes' in metadata
         

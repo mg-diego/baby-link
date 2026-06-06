@@ -1,3 +1,4 @@
+import 'dart:developer';
 import 'package:app/core/utils/duration_event_handler.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -327,7 +328,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final isStoppingNursing =
         eventType == EventType.nursing && activeNursing != null;
 
-    // Extraer el último tipo de leche para el biberón
     String? lastMilkType;
     if (eventType == EventType.bottle) {
       final now = DateTime.now();
@@ -363,21 +363,45 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     void saveAndClose(Map<String, dynamic> meta, DateTime time) async {
       Navigator.pop(context);
+      
+      Map<String, dynamic> finalMeta = Map.from(meta);
+
+      if (eventType == EventType.bedtime) {
+        final predictionsState = ref.read(sleepPredictionProvider(widget.babyId));
+        final predictions = predictionsState.asData?.value;
+        log('Cantidad de predicciones: ${predictions?.length}');
+
+        final bedTimePrediction = predictions
+            ?.where((p) => p.isBedtime) 
+            .firstOrNull;
+
+        if (bedTimePrediction != null) {
+          finalMeta['predicted_start_time'] = bedTimePrediction.start.toUtc().toIso8601String();
+        } else {
+          log('NO SE AÑADIÓ PREDICCIÓN: bedTimePrediction es nulo.');
+        }
+      }
+
       try {
         await ref
             .read(eventActionProvider)
-            .logEvent(widget.babyId, eventType.backendCategory, meta, time);
-        if (mounted)
+            .logEvent(widget.babyId, eventType.backendCategory, finalMeta, time);
+            
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Registrado: ${eventType.uiLabel}')),
           );
+        }
       } catch (e) {
-        if (mounted)
+        log('Error al guardar evento: $e');
+        if (mounted) {
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        }
       }
     }
+    // --- FIN LÓGICA DE GUARDADO ---
 
     showModalBottomSheet(
       context: context,

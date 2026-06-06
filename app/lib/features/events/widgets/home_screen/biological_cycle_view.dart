@@ -31,6 +31,41 @@ class BiologicalCycleView extends ConsumerWidget {
     required this.onTapPrediction,
   });
 
+  // Fase del cielo día: 0.0 = 5h, 1.0 = 21h
+  double _skyPhase() {
+    final now = DateTime.now();
+    final h = now.hour + now.minute / 60.0;
+    return ((h - 5.0) / 16.0).clamp(0.0, 1.0);
+  }
+
+  // Empieza a cambiar a las 16:30h, blanco puro a las 18:30h
+  double _dayDarkness() {
+    final now = DateTime.now();
+    final h = now.hour + now.minute / 60.0;
+    if (h < 16.5) return 0.0;
+    if (h > 18.5) return 1.0;
+    return ((h - 16.5) / 2.0).clamp(0.0, 1.0);
+  }
+
+  Color _dayTextPrimary() {
+    final t = _dayDarkness();
+    return Color.lerp(const Color(0xFF2D3142), Colors.white, t)!;
+  }
+
+  Color _dayTextSecondary() {
+    final t = _dayDarkness();
+    return Color.lerp(
+      const Color(0xFF546E7A),
+      Colors.white.withOpacity(0.75),
+      t,
+    )!;
+  }
+
+  double _dayTextShadow() {
+    // Sombra crece con la oscuridad del cielo para mantener contraste
+    return 0.06 + _dayDarkness() * 0.36;
+  }
+
   String _calculateAge(DateTime dob) {
     final now = DateTime.now();
     int years = now.year - dob.year;
@@ -208,7 +243,7 @@ class BiologicalCycleView extends ConsumerWidget {
     final pillText = isNightMode
         ? const Color(0xFF8C9EFF)
         : const Color(0xFF1565C0);
-    final textColorSec = isNightMode ? Colors.white54 : const Color(0xFF455A64);
+    final textColorSec = isNightMode ? Colors.white54 : _dayTextSecondary();
 
     String pillLabel;
     if (isNightMode) {
@@ -335,6 +370,7 @@ class BiologicalCycleView extends ConsumerWidget {
                         child: _HeaderIconButton(
                           icon: Icons.person_outline_rounded,
                           isNightMode: isNightMode,
+                          dayIconColor: _dayTextPrimary().withOpacity(0.75),
                           onTap: () {},
                         ),
                       ),
@@ -368,14 +404,14 @@ class BiologicalCycleView extends ConsumerWidget {
                                     style: TextStyle(
                                       color: isNightMode
                                           ? Colors.white
-                                          : const Color(0xFF2D3142),
+                                          : _dayTextPrimary(),
                                       fontSize: 15,
                                       fontWeight: FontWeight.w800,
                                       letterSpacing: 0.2,
                                       shadows: [
                                         Shadow(
                                           color: Colors.black.withOpacity(
-                                            isNightMode ? 0.40 : 0.10,
+                                            isNightMode ? 0.40 : _dayTextShadow(),
                                           ),
                                           blurRadius: 8,
                                         ),
@@ -388,13 +424,13 @@ class BiologicalCycleView extends ConsumerWidget {
                                     style: TextStyle(
                                       color: isNightMode
                                           ? Colors.white.withOpacity(0.65)
-                                          : const Color(0xFF546E7A),
+                                          :  _dayTextSecondary(),
                                       fontSize: 11,
                                       fontWeight: FontWeight.w600,
                                       shadows: [
                                         Shadow(
                                           color: Colors.black.withOpacity(
-                                            isNightMode ? 0.30 : 0.08,
+                                            isNightMode ? 0.30 : _dayTextShadow() * 0.7,
                                           ),
                                           blurRadius: 6,
                                         ),
@@ -411,6 +447,7 @@ class BiologicalCycleView extends ConsumerWidget {
                         child: _HeaderIconButton(
                           icon: Icons.calendar_today_rounded,
                           isNightMode: isNightMode,
+                          dayIconColor: _dayTextPrimary().withOpacity(0.75),
                           onTap: onOpenHistorical,
                         ),
                       ),
@@ -611,7 +648,10 @@ class OngoingEventBanner extends StatelessWidget {
     final type = EventType.fromBackend(cat, meta);
     final startTime = DateTime.parse(event['start_time']).toLocal();
     final isNap = cat == 'nap';
-    final predictedMinutes = meta['predicted_duration_minutes'] as num?;
+    
+    final predictedStartStr = meta['predicted_start_time'] as String?;
+    final predictedEndStr = meta['predicted_end_time'] as String?;
+    final hasPrediction = predictedStartStr != null && predictedEndStr != null;
 
     final textColor = isNightMode ? Colors.white : const Color(0xFF2D3142);
     final subTextColor = isNightMode ? Colors.white70 : const Color(0xFF546E7A);
@@ -717,19 +757,29 @@ class OngoingEventBanner extends StatelessWidget {
                 ),
 
                 // ── Nap progress bar ─────────────────────────────────────────
-                if (isNap && predictedMinutes != null) ...[
+                if (isNap && hasPrediction) ...[
                   const SizedBox(height: 10),
                   StreamBuilder(
                     stream: Stream.periodic(const Duration(minutes: 1)),
                     builder: (context, _) {
-                      final elapsed = DateTime.now()
-                          .difference(startTime)
-                          .inMinutes;
-                      final total = predictedMinutes.toDouble();
+                      final now = DateTime.now();
+                      final elapsed = now.difference(startTime).inMinutes;
+
+                      // Parsear a DateTime local
+                      final pStart = DateTime.parse(predictedStartStr).toLocal();
+                      final pEnd = DateTime.parse(predictedEndStr).toLocal();
+
+                      // Duración predicha en base a los timestamps
+                      final totalRaw = pEnd.difference(pStart).inMinutes.toDouble();
+                      final total = totalRaw > 0 ? totalRaw : 1.0; // Evitar división por 0
+                      
                       final progress = (elapsed / total).clamp(0.0, 1.0);
-                      final remainingMins = (total - elapsed).ceil();
-                      final overdueMins = elapsed - total.toInt();
-                      final isOverdue = elapsed >= total;
+                      
+                      // Calcular el estado respecto a la HORA DE FIN predicha
+                      final remainingMins = pEnd.difference(now).inMinutes;
+                      final isOverdue = remainingMins < 0;
+                      final overdueMins = isOverdue ? -remainingMins : 0;
+                      
                       final accentColor = type.getAccentColor(context);
 
                       return Column(
@@ -892,11 +942,13 @@ class BiologicalActionButton extends StatelessWidget {
 class _HeaderIconButton extends StatelessWidget {
   final IconData icon;
   final bool isNightMode;
+  final Color dayIconColor; 
   final VoidCallback onTap;
 
   const _HeaderIconButton({
     required this.icon,
     required this.isNightMode,
+    required this.dayIconColor,
     required this.onTap,
   });
 
@@ -924,7 +976,7 @@ class _HeaderIconButton extends StatelessWidget {
           size: 20,
           color: isNightMode
               ? Colors.white.withOpacity(0.80)
-              : const Color(0xFF2D3142).withOpacity(0.70),
+              : dayIconColor,
         ),
       ),
     );

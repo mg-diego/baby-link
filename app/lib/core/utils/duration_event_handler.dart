@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:app/core/utils/time_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -75,7 +77,8 @@ class DurationEventHandler {
           child: StatefulBuilder(
             builder: (BuildContext context, StateSetter setModalState) {
               // Es válido SOLO si hay hora de fin Y no es anterior a la de inicio
-              final isValidEnd = tempEndTime != null && !tempEndTime!.isBefore(tempStartTime);
+              final isValidEnd =
+                  tempEndTime != null && !tempEndTime!.isBefore(tempStartTime);
 
               return Column(
                 mainAxisSize: MainAxisSize.min,
@@ -97,7 +100,7 @@ class DurationEventHandler {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  
+
                   // --- HORA DE INICIO ---
                   const Align(
                     alignment: Alignment.centerLeft,
@@ -113,8 +116,11 @@ class DurationEventHandler {
                       setModalState(() {
                         tempStartTime = newTime;
                         // Si ya habían puesto hora de fin y ahora queda por detrás del inicio, la empujamos
-                        if (tempEndTime != null && tempEndTime!.isBefore(tempStartTime)) {
-                          tempEndTime = tempStartTime.add(const Duration(minutes: 30));
+                        if (tempEndTime != null &&
+                            tempEndTime!.isBefore(tempStartTime)) {
+                          tempEndTime = tempStartTime.add(
+                            const Duration(minutes: 30),
+                          );
                         }
                       });
                     },
@@ -135,19 +141,25 @@ class DurationEventHandler {
                           onTap: () => setModalState(() => tempEndTime = null),
                           child: const Text(
                             'Borrar',
-                            style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 13),
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
                           ),
                         ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  
+
                   // Estado vacío vs Selector activo
                   if (tempEndTime == null)
                     InkWell(
                       onTap: () {
                         setModalState(() {
-                          tempEndTime = tempStartTime.add(const Duration(minutes: 30));
+                          tempEndTime = tempStartTime.add(
+                            const Duration(minutes: 30),
+                          );
                         });
                       },
                       borderRadius: BorderRadius.circular(12),
@@ -165,11 +177,18 @@ class DurationEventHandler {
                         child: const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.add_circle_outline_rounded, color: Colors.grey, size: 20),
+                            Icon(
+                              Icons.add_circle_outline_rounded,
+                              color: Colors.grey,
+                              size: 20,
+                            ),
                             SizedBox(width: 8),
                             Text(
                               'Añadir hora de fin',
-                              style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ],
                         ),
@@ -181,7 +200,7 @@ class DurationEventHandler {
                       onTimeChanged: (newTime) =>
                           setModalState(() => tempEndTime = newTime),
                     ),
-                  
+
                   // Mensaje de error si la pusieron mal
                   if (tempEndTime != null && !isValidEnd)
                     const Padding(
@@ -191,9 +210,9 @@ class DurationEventHandler {
                         style: TextStyle(color: Colors.red, fontSize: 12),
                       ),
                     ),
-                    
+
                   const SizedBox(height: 30),
-                  
+
                   // --- BOTONES DE ACCIÓN ---
                   SizedBox(
                     width: double.infinity,
@@ -204,7 +223,7 @@ class DurationEventHandler {
                           ? () {
                               Navigator.pop(ctx, {
                                 'start': tempStartTime,
-                                'end': tempEndTime!
+                                'end': tempEndTime!,
                               });
                             }
                           : null,
@@ -268,35 +287,21 @@ class DurationEventHandler {
       Map<String, dynamic> metadata = {};
       if (eventType == EventType.nursing) metadata = {'type': 'nursing'};
       if (eventType == EventType.nap) {
-        final predictions = ref
-            .read(sleepPredictionProvider(babyId))
-            .asData
-            ?.value;
+        final predictionsState = ref.read(sleepPredictionProvider(babyId));
+        final predictions = predictionsState.asData?.value;
         final currentNapPrediction = predictions
             ?.where((p) => p.isNap)
             .firstOrNull;
+
         if (currentNapPrediction != null && currentNapPrediction.end != null) {
-          final predictedDuration = currentNapPrediction.end!
-              .difference(currentNapPrediction.start)
-              .inMinutes;
-          metadata = {'predicted_duration_minutes': predictedDuration};
-        }
-      }
-
-      if (eventType == EventType.bedtime) {
-        final predictions = ref
-            .read(sleepPredictionProvider(babyId))
-            .asData
-            ?.value;
-
-        final bedTimePrediction = predictions
-            ?.where((p) => p.isBedtime)
-            .firstOrNull;
-
-        if (bedTimePrediction != null) {
           metadata = {
             ...metadata,
-            'predicted_start_time': bedTimePrediction.start.toIso8601String(),
+            'predicted_start_time': currentNapPrediction.start
+                .toUtc()
+                .toIso8601String(),
+            'predicted_end_time': currentNapPrediction.end!
+                .toUtc()
+                .toIso8601String(),
           };
         }
       }
@@ -314,7 +319,7 @@ class DurationEventHandler {
         await ApiService.updateEvent(eventId.toString(), {
           'end_time': selectedEndTime.toUtc().toIso8601String(),
         });
-        
+
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -323,9 +328,11 @@ class DurationEventHandler {
           );
         }
       } else {
-        ref.read(provider.notifier).start(eventId.toString(), selectedStartTime);
+        ref
+            .read(provider.notifier)
+            .start(eventId.toString(), selectedStartTime);
       }
-      
+
       onSuccess();
     } catch (e) {
       if (context.mounted) {
@@ -335,7 +342,7 @@ class DurationEventHandler {
       }
     }
   }
-  
+
   static Future<void> _stopEvent(
     BuildContext context,
     WidgetRef ref,

@@ -72,6 +72,21 @@ class _VisualClockViewState extends State<VisualClockView>
     }
   }
 
+  double _dayDarkness() {
+    final h = DateTime.now().hour + DateTime.now().minute / 60.0;
+    if (h < 16.5) return 0.0;
+    if (h > 18.5) return 1.0;
+    return ((h - 16.5) / 2.0).clamp(0.0, 1.0);
+  }
+
+  Color _dayTextPrimary() =>
+      Color.lerp(const Color(0xFF2D3142), Colors.white, _dayDarkness())!;
+
+  Color _dayTextMuted() =>
+      Color.lerp(Colors.black54, Colors.white54, _dayDarkness())!;
+
+  double _dayTextShadow() => 0.06 + _dayDarkness() * 0.36;
+
   String _dayNightLabel() {
     const months = [
       'Enero',
@@ -156,7 +171,7 @@ class _VisualClockViewState extends State<VisualClockView>
   ({DateTime start, DateTime end}) _computeRange() {
     final todayAsc = List<Map<String, dynamic>>.from(widget.events)
       ..sort((a, b) => a['start_time'].compareTo(b['start_time']));
-    
+
     // Lista combinada para buscar de forma más segura el último bedtime
     final allEventsDesc = [...widget.yesterdayEvents, ...widget.events]
       ..sort((a, b) => b['start_time'].compareTo(a['start_time']));
@@ -362,13 +377,32 @@ class _VisualClockViewState extends State<VisualClockView>
     }
 
     if (label.isNotEmpty) {
-      Color labelColor = widget.forceNightMode != null
-          ? (_isDayMode ? Colors.black54 : Colors.white54)
-          : ClockPalette.textMuted;
+      // ── Colores adaptativos ──────────────────────────────────────────────
+      final Color labelColor;
+      final Color timeColor;
+      final Color pillColor;
+      final Color pillTextColor;
 
-      Color timeColor = widget.forceNightMode != null
-          ? (_isDayMode ? const Color(0xFF2D3142) : Colors.white)
-          : ClockPalette.textPrimary;
+      if (widget.forceNightMode != null) {
+        if (_isDayMode) {
+          // Día sobre fondo de cielo → adaptativo según hora
+          labelColor = _dayTextMuted();
+          timeColor = _dayTextPrimary();
+          pillColor = Colors.black.withOpacity(0.05 + _dayDarkness() * 0.10);
+          pillTextColor = _dayTextMuted();
+        } else {
+          // Noche → siempre claro
+          labelColor = Colors.white54;
+          timeColor = Colors.white;
+          pillColor = Colors.white.withOpacity(0.08);
+          pillTextColor = Colors.white70;
+        }
+      } else {
+        labelColor = ClockPalette.textMuted;
+        timeColor = ClockPalette.textPrimary;
+        pillColor = Colors.black.withOpacity(0.05);
+        pillTextColor = ClockPalette.textMuted;
+      }
 
       return Column(
         mainAxisSize: MainAxisSize.min,
@@ -380,6 +414,14 @@ class _VisualClockViewState extends State<VisualClockView>
               fontWeight: FontWeight.w500,
               color: labelColor,
               letterSpacing: 1.0,
+              shadows: widget.forceNightMode != null && _isDayMode
+                  ? [
+                      Shadow(
+                        color: Colors.black.withOpacity(_dayTextShadow()),
+                        blurRadius: 6,
+                      ),
+                    ]
+                  : null,
             ),
           ),
           const SizedBox(height: 4),
@@ -391,6 +433,14 @@ class _VisualClockViewState extends State<VisualClockView>
               color: timeColor,
               letterSpacing: -1.0,
               height: 1.0,
+              shadows: widget.forceNightMode != null && _isDayMode
+                  ? [
+                      Shadow(
+                        color: Colors.black.withOpacity(_dayTextShadow()),
+                        blurRadius: 8,
+                      ),
+                    ]
+                  : null,
             ),
           ),
           if (widget.forceNightMode != null &&
@@ -400,9 +450,7 @@ class _VisualClockViewState extends State<VisualClockView>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: _isDayMode
-                    ? Colors.black.withOpacity(0.05)
-                    : Colors.white.withOpacity(0.08),
+                color: pillColor,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
@@ -410,7 +458,7 @@ class _VisualClockViewState extends State<VisualClockView>
                     ? 'Dormir a las ${DateFormat('HH:mm').format(widget.biologicalCycleEnd!)}'
                     : 'Previsto: ${widget.biologicalCycleEnd!.difference(_computeRange().start).inHours}h',
                 style: TextStyle(
-                  color: _isDayMode ? Colors.black54 : Colors.white70,
+                  color: pillTextColor,
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),

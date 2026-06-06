@@ -192,16 +192,29 @@ class EventLoggerSheet extends ConsumerWidget {
                 )
               else if (eventType == EventType.bedtime)
                 BedtimeForm(
-                  onSave: (meta, time) => executeAndClose(
-                    ctx,
-                    () => actionService.logEvent(
-                      babyId,
-                      eventType.backendCategory,
-                      meta,
-                      time,
-                    ),
-                    'A dormir registrado',
-                  ),
+                  onSave: (meta, time) {
+                    Map<String, dynamic> finalMeta = Map.from(meta);
+                    
+                    final predictionsState = ref.read(sleepPredictionProvider(babyId));
+                    final predictions = predictionsState.asData?.value;                    
+                    final bedTimePrediction = predictions?.where((p) => !p.isNap).firstOrNull;
+
+                    if (bedTimePrediction != null && bedTimePrediction.end != null) {
+                      finalMeta['predicted_start_time'] = bedTimePrediction.start.toUtc().toIso8601String();
+                      finalMeta['predicted_end_time'] = bedTimePrediction.end!.toUtc().toIso8601String();                          
+                    }
+
+                    executeAndClose(
+                      ctx,
+                      () => actionService.logEvent(
+                        babyId,
+                        eventType.backendCategory,
+                        finalMeta,
+                        time,
+                      ),
+                      'A dormir registrado',
+                    );
+                  },
                 )
               else if (eventType == EventType.bottle)
                 BottleForm(
