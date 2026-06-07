@@ -148,6 +148,22 @@ class PredictionService:
                 min_day_ww = profile['ww_day'] * 0.60
                 profile['ww_day'] = max(min_day_ww, profile['ww_day'] - compensation)
 
+        biases = self._calculate_prediction_biases(events_asc)
+
+        # Si el bebé consistentemente empieza las siestas más tarde de lo predicho,
+        # las wake windows están subestimadas → ampliarlas
+        for idx, bias_min in biases['ww_bias_by_idx'].items():
+            if idx == 1:
+                profile['ww_morning'] += bias_min * 0.5   # corrección gradual, no total
+            else:
+                profile['ww_day']     += bias_min * 0.5
+
+        # Si las siestas duran más/menos de lo predicho → ajustar nap_base
+        profile['nap_base'] += biases['duration_bias'] * 0.5
+
+        # Pasar los biases al generador para corregir bedtime
+        profile['bedtime_bias'] = biases['bedtime_bias']
+
         return self._generate_timeline(profile, morning_wake_today, last_wake_time, naps_taken_today)
     
     def calculate_wake_prediction(self, baby_id: str):
@@ -281,11 +297,11 @@ class PredictionService:
                     next_nap_end = next_nap_start + timedelta(minutes=30) 
                     
                     timeline.append({
-                        "type": "nap",
-                        "index": nap_idx,
-                        "start": next_nap_start.strftime('%Y-%m-%dT%H:%M:%SZ'),
-                        "end": next_nap_end.strftime('%Y-%m-%dT%H:%M:%SZ'),
-                        "note": "Siesta de rescate"
+                        "type":       "nap",
+                        "index":      nap_idx,
+                        "start":      next_nap_start.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                        "end":        next_nap_end.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                        "nap_index":  nap_idx, 
                     })
                     curr = next_nap_end
                     nap_idx += 1
@@ -308,6 +324,7 @@ class PredictionService:
                     blend_factor *= 0.15 
                 
                 final_bed = pure_bed + timedelta(seconds=diff_seconds * blend_factor)
+                final_bed += timedelta(minutes=p.get('bedtime_bias', 0) * 0.5)
                 
                 if final_bed > target_bed + timedelta(minutes=60):
                     final_bed = target_bed + timedelta(minutes=60)
@@ -346,3 +363,58 @@ class PredictionService:
             nap_idx += 1
             
         return timeline
+    
+    def _calculate_prediction_biases(self, events):
+        """
+        Calcula el sesgo sistemático comparando predicciones pasadas con realidad.
+        Requiere al menos 3 pares para cada métrica para ser significativo.
+        """
+        import json
+
+        ww_errors_by_nap_idx = {}   # {1: [mins], 2: [mins], ...}
+        duration_errors      = []
+        bedtime_errors       = []
+
+        for ev in events:
+            meta = ev.get('metadata', {})
+            if isinstance(meta, str):
+                try: meta = json.loads(meta)
+                except: continue
+
+            pred_start_str = meta.get('predicted_start_time')
+            if not pred_start_str:
+                continue
+
+            pred_start  = self._parse_utc(pred_start_str)
+            actual_start = self._parse_utc(ev['start_time'])
+            if not pred_start or not actual_start:
+                continue
+
+            error_min = (actual_start - pred_start).total_seconds() / 60
+
+            if ev['category'] == 'nap':
+                # nap_index debe guardarse en metadata al emitir la predicción (ver abajo)
+                idx = meta.get('nap_index', 1)
+                ww_errors_by_nap_idx.setdefault(idx, []).append(error_min)
+
+                pred_end_str   = meta.get('predicted_end_time')
+                actual_end_str = ev.get('end_time')
+                if pred_end_str and actual_end_str:
+                    pred_end   = self._parse_utc(pred_end_str)
+                    actual_end = self._parse_utc(actual_end_str)
+                    if pred_end and actual_end:
+                        pred_dur   = (pred_end   - pred_start).total_seconds() / 60
+                        actual_dur = (actual_end - actual_start).total_seconds() / 60
+                        duration_errors.append(actual_dur - pred_dur)
+
+            elif ev['category'] == 'bed_time':
+                bedtime_errors.append(error_min)
+
+        def median_bias(errors, min_samples=3):
+            return np.median(errors) if len(errors) >= min_samples else 0.0
+
+        return {
+            'ww_bias_by_idx':   {idx: median_bias(errs) for idx, errs in ww_errors_by_nap_idx.items()},
+            'duration_bias':    median_bias(duration_errors),
+            'bedtime_bias':     median_bias(bedtime_errors),
+        }
