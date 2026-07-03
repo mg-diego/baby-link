@@ -19,34 +19,32 @@ class HomeAssistantService:
         current_sleep_type = None
         sleeping_since = None
 
-        # CORRECCIÓN: Añadido 'await' para evitar recibir un objeto coroutine
-        active_sleep_events = await self.event_repository.get_active_events(baby_id, category=EventCategory.NAP.value)
+        # CORRECCIÓN: SIN 'await' porque el repositorio ya devuelve una lista normal (list)
+        active_sleep_events = self.event_repository.get_active_events(baby_id, category=EventCategory.NAP.value)
         if not active_sleep_events:
-            active_sleep_events = await self.event_repository.get_active_events(baby_id, category=EventCategory.NIGHT_WAKING.value)
-            # If night_waking is active, it means the baby is awake during the night, so not sleeping in terms of "current_state"
-            # We are looking for continuous sleep, so if night_waking is active, baby is not "sleeping" in the context of this state.
+            active_sleep_events = self.event_repository.get_active_events(baby_id, category=EventCategory.NIGHT_WAKING.value)
 
         if active_sleep_events:
             for event in active_sleep_events:
-                # Check for actual sleep events (like NAP or BED_TIME that don't have end_time)
                 if event['category'] in [EventCategory.NAP.value, EventCategory.BED_TIME.value] and not event.get('end_time'):
                     is_sleeping = True
                     current_sleep_type = "Siesta" if event['category'] == EventCategory.NAP.value else "Noche"
                     sleeping_since = event['start_time']
-                    break # Assuming only one active sleep event at a time
+                    break
 
         # 3. Today's Summary
         today = date.today()
-        # Fetch all events for today
         
-        # CORRECCIÓN: Añadido 'await' al llamar a get_recent_events
-        all_recent_events = await self.event_repository.get_recent_events(baby_id)
+        # CORRECCIÓN: SIN 'await' porque devuelve una lista normal (list)
+        all_recent_events = self.event_repository.get_recent_events(baby_id) or []
         
         today_events = []
         for event in all_recent_events:
-            event_date_str = datetime.fromisoformat(event['start_time'].replace('Z', '+00:00')).date()
-            if event_date_str == today:
-                today_events.append(event)
+            start_str = event.get('start_time')
+            if start_str:
+                event_date_str = datetime.fromisoformat(start_str.replace('Z', '+00:00')).date()
+                if event_date_str == today:
+                    today_events.append(event)
 
         total_sleep_mins = 0
         total_feeds = 0
@@ -74,27 +72,28 @@ class HomeAssistantService:
         last_feed_event = None
         last_diaper_event = None
 
-        # CORRECCIÓN: Añadido 'await' al llamar a get_by_baby
-        recent_events = await self.event_repository.get_by_baby(baby_id, limit=50)
+        # CORRECCIÓN: SIN 'await' porque devuelve una lista normal (list)
+        recent_events = self.event_repository.get_by_baby(baby_id, limit=50) or []
 
         for event in recent_events:
+            metadata = event.get('metadata', {})
             if event['category'] == EventCategory.FEED.value and not last_feed_event:
                 last_feed_event = {
-                    "time": event['start_time'],
-                    "type": event['metadata'].get('type'),
-                    "amount_ml": event['metadata'].get('amount_ml')
+                    "time": event.get('start_time'),
+                    "type": metadata.get('type', '-'),
+                    "amount_ml": metadata.get('amount_ml', 0)
                 }
             elif event['category'] == EventCategory.DIAPER.value and not last_diaper_event:
                 last_diaper_event = {
-                    "time": event['start_time'],
-                    "condition": event['metadata'].get('condition')
+                    "time": event.get('start_time'),
+                    "condition": metadata.get('condition', 'clean')
                 }
             
             if last_feed_event and last_diaper_event:
-                break # Found both, no need to continue
+                break
 
-        # Construct the final JSON
-        response_json = {
+        # Construct the final JSON (Protegido contra None para evitar fallos de serialización)
+        return {
             "baby_id": str(baby_id),
             "name": baby_name,
             "current_state": {
@@ -112,4 +111,3 @@ class HomeAssistantService:
                 "last_diaper": last_diaper_event or {"time": None, "condition": "clean"}
             }
         }
-        return response_json
