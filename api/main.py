@@ -14,7 +14,8 @@ from models.baby_models import BabyCreate
 from services.baby_service import BabyService
 from services.event_service import EventService
 from services.analytics_service import AnalyticsService
-from dependencies import get_analytics_service, get_baby_service, get_event_service, get_prediction_service
+from services.home_assistant_service import HomeAssistantService
+from dependencies import get_analytics_service, get_baby_service, get_event_service, get_prediction_service, get_home_assistant_service
 
 # --- CONFIGURACIÓN ---
 logging.basicConfig(level=logging.INFO)
@@ -231,3 +232,13 @@ def get_stats(
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generando estadísticas: {str(e)}")
+    
+
+@app.get("/homeassistant/{baby_id}/summary", tags=["Home Assisstant"])
+def get_home_assistant_data(baby_id: str, service: HomeAssistantService = Depends(get_home_assistant_service)):
+    """Obtiene todos los eventos detallados entre dos fechas."""
+    try:
+        events = service.get_summary(baby_id)
+        return {"status": "success", "data": events}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

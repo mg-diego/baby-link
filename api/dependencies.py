@@ -1,4 +1,5 @@
 import os
+
 from fastapi import Depends
 from supabase import create_client, Client
 from dotenv import load_dotenv
@@ -11,6 +12,7 @@ from services.baby_service import BabyService
 from services.event_service import EventService
 from services.analytics_service import AnalyticsService
 from services.prediction_service import PredictionService
+from services.home_assistant_service import HomeAssistantService
 
 load_dotenv()
 
@@ -41,3 +43,6 @@ def get_analytics_service(repository: AnalyticsRepository = Depends(get_analytic
 
 def get_prediction_service(repository: EventRepository = Depends(get_event_repository)) -> PredictionService:
     return PredictionService(repository)
+
+def get_home_assistant_service(baby_repository: BabyRepository = Depends(get_baby_repository), event_repository: EventRepository = Depends(get_event_repository)):
+    return HomeAssistantService(baby_repository, event_repository)
