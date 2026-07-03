@@ -19,9 +19,10 @@ class HomeAssistantService:
         current_sleep_type = None
         sleeping_since = None
 
-        active_sleep_events = self.event_repository.get_active_events(baby_id, category=EventCategory.NAP.value)
+        # CORRECCIÓN: Añadido 'await' para evitar recibir un objeto coroutine
+        active_sleep_events = await self.event_repository.get_active_events(baby_id, category=EventCategory.NAP.value)
         if not active_sleep_events:
-            active_sleep_events = self.event_repository.get_active_events(baby_id, category=EventCategory.NIGHT_WAKING.value)
+            active_sleep_events = await self.event_repository.get_active_events(baby_id, category=EventCategory.NIGHT_WAKING.value)
             # If night_waking is active, it means the baby is awake during the night, so not sleeping in terms of "current_state"
             # We are looking for continuous sleep, so if night_waking is active, baby is not "sleeping" in the context of this state.
 
@@ -37,23 +38,9 @@ class HomeAssistantService:
         # 3. Today's Summary
         today = date.today()
         # Fetch all events for today
-        # The get_events_by_date_range is in AnalyticsRepository, need to replicate logic or use get_recent_events
-        # For simplicity, let's fetch all events for today and filter
         
-        # Adjust get_recent_events to filter for a specific day
-        # For now, let's fetch events for a small duration and filter them
-        # This part might need a more efficient query if event_repository doesn't support date range easily.
-        # Assuming get_recent_events can take a 'days' parameter as shown in event_repository.py (one of the methods has it)
-        # However, the current get_recent_events doesn't take days as a filter parameter in the read file.
-        # I will fetch all events and filter them in memory for now, or adapt if there's a better repo method.
-        
-        # Let's adjust event_repository.py's get_recent_events to allow date filtering for today
-        # As I can't modify the file, I will fetch a larger window and filter here.
-        # A better approach would be to add a get_events_for_date method to EventRepository.
-        
-        # For this prototype, let's fetch events from the last 2 days and filter for today.
-        # This is not optimal but works given tool limitations.
-        all_recent_events = self.event_repository.get_recent_events(baby_id) # This fetches all in the last 30 days based on previous inspection
+        # CORRECCIÓN: Añadido 'await' al llamar a get_recent_events
+        all_recent_events = await self.event_repository.get_recent_events(baby_id)
         
         today_events = []
         for event in all_recent_events:
@@ -87,9 +74,8 @@ class HomeAssistantService:
         last_feed_event = None
         last_diaper_event = None
 
-        # Fetch recent events and find the latest feed and diaper
-        # get_by_baby (limit=20) is good for this
-        recent_events = self.event_repository.get_by_baby(baby_id, limit=50) # Increased limit to find recent of specific type
+        # CORRECCIÓN: Añadido 'await' al llamar a get_by_baby
+        recent_events = await self.event_repository.get_by_baby(baby_id, limit=50)
 
         for event in recent_events:
             if event['category'] == EventCategory.FEED.value and not last_feed_event:
@@ -109,7 +95,7 @@ class HomeAssistantService:
 
         # Construct the final JSON
         response_json = {
-            "baby_id": baby_id,
+            "baby_id": str(baby_id),
             "name": baby_name,
             "current_state": {
                 "is_sleeping": is_sleeping,
@@ -122,8 +108,8 @@ class HomeAssistantService:
                 "total_diapers": total_diapers
             },
             "last_events": {
-                "last_feed": last_feed_event,
-                "last_diaper": last_diaper_event
+                "last_feed": last_feed_event or {"time": None, "type": "-", "amount_ml": 0},
+                "last_diaper": last_diaper_event or {"time": None, "condition": "clean"}
             }
         }
         return response_json

@@ -235,10 +235,10 @@ def get_stats(
     
 
 @app.get("/homeassistant/{baby_id}/summary", tags=["Home Assisstant"])
-def get_home_assistant_data(baby_id: str, service: HomeAssistantService = Depends(get_home_assistant_service)):
+async def get_home_assistant_data(baby_id: str, service: HomeAssistantService = Depends(get_home_assistant_service)):
     """Obtiene todos los eventos detallados entre dos fechas."""
     try:
-        events = service.get_summary(baby_id)
+        events = await service.get_summary(baby_id)
         return {"status": "success", "data": events}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
