@@ -1,5 +1,3 @@
-import 'dart:developer';
-
 import 'package:app/core/utils/time_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,7 +9,7 @@ import '../../features/events/providers/events_provider.dart';
 
 class DurationEventHandler {
   static StateNotifierProvider<ActiveEventNotifier, ActiveEvent?>?
-  getProviderForEventType(EventType type) {
+      getProviderForEventType(EventType type) {
     if (type == EventType.nap) return activeNapProvider;
     if (type == EventType.nightWaking) return activeNightWakingProvider;
     if (type == EventType.nursing) return activeNursingProvider;
@@ -60,220 +58,231 @@ class DurationEventHandler {
       backgroundColor: Colors.transparent,
       builder: (ctx) {
         DateTime tempStartTime = DateTime.now();
-        // Empezamos con la hora de fin nula (vacía)
         DateTime? tempEndTime;
 
-        return Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-            left: 20,
-            right: 20,
-            top: 10,
-          ),
-          child: StatefulBuilder(
-            builder: (BuildContext context, StateSetter setModalState) {
-              // Es válido SOLO si hay hora de fin Y no es anterior a la de inicio
-              final isValidEnd =
-                  tempEndTime != null && !tempEndTime!.isBefore(tempStartTime);
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            final size = MediaQuery.sizeOf(ctx);
+            final viewInsets = MediaQuery.viewInsetsOf(ctx);
+            final scale = (size.width / 400).clamp(0.85, 1.2);
+            final horizontalPadding = size.width > 600 ? (size.width - 600) / 2 : 0.0;
+            final isValidEnd =
+                tempEndTime != null && !tempEndTime!.isBefore(tempStartTime);
 
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 40,
-                    height: 5,
-                    margin: const EdgeInsets.only(bottom: 20, top: 10),
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: size.height * 0.9),
+                  child: Container(
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade400,
-                      borderRadius: BorderRadius.circular(10),
+                      color: Theme.of(context).colorScheme.surface,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                     ),
-                  ),
-                  Text(
-                    'Registrar ${eventType.uiLabel}',
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
+                    padding: EdgeInsets.only(
+                      bottom: viewInsets.bottom + (20 * scale),
+                      left: 24 * scale,
+                      right: 24 * scale,
+                      top: 12 * scale,
                     ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // --- HORA DE INICIO ---
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Hora de inicio',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  CustomTimePicker(
-                    time: tempStartTime,
-                    onTimeChanged: (newTime) {
-                      setModalState(() {
-                        tempStartTime = newTime;
-                        // Si ya habían puesto hora de fin y ahora queda por detrás del inicio, la empujamos
-                        if (tempEndTime != null &&
-                            tempEndTime!.isBefore(tempStartTime)) {
-                          tempEndTime = tempStartTime.add(
-                            const Duration(minutes: 30),
-                          );
-                        }
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 20),
-
-                  // --- HORA DE FIN (Opcional) ---
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Hora de fin (Opcional)',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      // Botón para limpiar la hora si se arrepienten
-                      if (tempEndTime != null)
-                        GestureDetector(
-                          onTap: () => setModalState(() => tempEndTime = null),
-                          child: const Text(
-                            'Borrar',
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 48 * scale,
+                            height: 5 * scale,
+                            margin: EdgeInsets.only(bottom: 20 * scale),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          Text(
+                            'Registrar ${eventType.uiLabel}',
                             style: TextStyle(
-                              color: Colors.red,
+                              fontSize: 22 * scale,
                               fontWeight: FontWeight.bold,
-                              fontSize: 13,
                             ),
                           ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Estado vacío vs Selector activo
-                  if (tempEndTime == null)
-                    InkWell(
-                      onTap: () {
-                        setModalState(() {
-                          tempEndTime = tempStartTime.add(
-                            const Duration(minutes: 30),
-                          );
-                        });
-                      },
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 20),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.grey.withOpacity(0.3),
-                            style: BorderStyle.solid,
-                          ),
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.add_circle_outline_rounded,
-                              color: Colors.grey,
-                              size: 20,
-                            ),
-                            SizedBox(width: 8),
-                            Text(
-                              'Añadir hora de fin',
+                          SizedBox(height: 24 * scale),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Hora de inicio',
                               style: TextStyle(
-                                color: Colors.grey,
                                 fontWeight: FontWeight.bold,
+                                fontSize: 15 * scale,
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                    )
-                  else
-                    CustomTimePicker(
-                      time: tempEndTime!,
-                      onTimeChanged: (newTime) =>
-                          setModalState(() => tempEndTime = newTime),
-                    ),
-
-                  // Mensaje de error si la pusieron mal
-                  if (tempEndTime != null && !isValidEnd)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 12.0),
-                      child: Text(
-                        'La hora de fin no puede ser anterior al inicio',
-                        style: TextStyle(color: Colors.red, fontSize: 12),
-                      ),
-                    ),
-
-                  const SizedBox(height: 30),
-
-                  // --- BOTONES DE ACCIÓN ---
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      // Se deshabilita pasándole 'null' si isValidEnd es falso
-                      onPressed: isValidEnd
-                          ? () {
-                              Navigator.pop(ctx, {
-                                'start': tempStartTime,
-                                'end': tempEndTime!,
+                          ),
+                          SizedBox(height: 10 * scale),
+                          CustomTimePicker(
+                            time: tempStartTime,
+                            onTimeChanged: (newTime) {
+                              setModalState(() {
+                                tempStartTime = newTime;
+                                if (tempEndTime != null &&
+                                    tempEndTime!.isBefore(tempStartTime)) {
+                                  tempEndTime = tempStartTime.add(
+                                    const Duration(minutes: 30),
+                                  );
+                                }
                               });
-                            }
-                          : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.teal,
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: Colors.grey.shade300,
-                        disabledForegroundColor: Colors.grey.shade500,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'Guardar evento finalizado',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
+                            },
+                          ),
+                          SizedBox(height: 24 * scale),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Hora de fin (Opcional)',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15 * scale,
+                                ),
+                              ),
+                              if (tempEndTime != null)
+                                GestureDetector(
+                                  onTap: () => setModalState(() => tempEndTime = null),
+                                  child: Text(
+                                    'Borrar',
+                                    style: TextStyle(
+                                      color: Colors.red,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14 * scale,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          SizedBox(height: 10 * scale),
+                          if (tempEndTime == null)
+                            InkWell(
+                              onTap: () {
+                                setModalState(() {
+                                  tempEndTime = tempStartTime.add(
+                                    const Duration(minutes: 30),
+                                  );
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(16 * scale),
+                              child: Container(
+                                width: double.infinity,
+                                padding: EdgeInsets.symmetric(vertical: 16 * scale),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(16 * scale),
+                                  border: Border.all(
+                                    color: Colors.grey.withOpacity(0.3),
+                                    style: BorderStyle.solid,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.add_circle_outline_rounded,
+                                      color: Colors.grey.shade600,
+                                      size: 20 * scale,
+                                    ),
+                                    SizedBox(width: 8 * scale),
+                                    Text(
+                                      'Añadir hora de fin',
+                                      style: TextStyle(
+                                        color: Colors.grey.shade600,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15 * scale,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )
+                          else
+                            CustomTimePicker(
+                              time: tempEndTime!,
+                              onTimeChanged: (newTime) =>
+                                  setModalState(() => tempEndTime = newTime),
+                            ),
+                          if (tempEndTime != null && !isValidEnd)
+                            Padding(
+                              padding: EdgeInsets.only(top: 12.0 * scale),
+                              child: Text(
+                                'La hora de fin no puede ser anterior al inicio',
+                                style: TextStyle(
+                                  color: Colors.red.shade400,
+                                  fontSize: 13 * scale,
+                                ),
+                              ),
+                            ),
+                          SizedBox(height: 32 * scale),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 52 * scale,
+                            child: ElevatedButton(
+                              onPressed: isValidEnd
+                                  ? () {
+                                      Navigator.pop(ctx, {
+                                        'start': tempStartTime,
+                                        'end': tempEndTime!,
+                                      });
+                                    }
+                                  : null,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Theme.of(context).colorScheme.primary,
+                                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                                disabledBackgroundColor: Colors.grey.shade300,
+                                disabledForegroundColor: Colors.grey.shade500,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16 * scale),
+                                ),
+                                elevation: isValidEnd ? 2 : 0,
+                              ),
+                              child: Text(
+                                'Guardar evento finalizado',
+                                style: TextStyle(
+                                  fontSize: 16 * scale,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: 12 * scale),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 52 * scale,
+                            child: OutlinedButton(
+                              onPressed: () {
+                                Navigator.pop(ctx, {'start': tempStartTime});
+                              },
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Theme.of(context).colorScheme.primary,
+                                side: BorderSide(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  width: 1.5,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16 * scale),
+                                ),
+                              ),
+                              child: Text(
+                                'Solo iniciar evento',
+                                style: TextStyle(
+                                  fontSize: 16 * scale,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: OutlinedButton(
-                      onPressed: () {
-                        // Aquí mandamos el 'start' y forzamos el 'end' a null
-                        Navigator.pop(ctx, {'start': tempStartTime});
-                      },
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.teal,
-                        side: const BorderSide(color: Colors.teal, width: 1.5),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'Solo iniciar evento',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
+                ),
+              ),
+            );
+          },
         );
       },
     );
@@ -361,124 +370,148 @@ class DurationEventHandler {
           tempEndTime = activeEvent.startTime.add(const Duration(minutes: 1));
         }
 
-        return Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-            left: 20,
-            right: 20,
-            top: 10,
-          ),
-          child: StatefulBuilder(
-            builder: (BuildContext context, StateSetter setModalState) {
-              final duration = tempEndTime.difference(activeEvent.startTime);
-              final isValid = !tempEndTime.isBefore(activeEvent.startTime);
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            final size = MediaQuery.sizeOf(ctx);
+            final viewInsets = MediaQuery.viewInsetsOf(ctx);
+            final scale = (size.width / 400).clamp(0.85, 1.2);
+            final horizontalPadding = size.width > 600 ? (size.width - 600) / 2 : 0.0;
+            
+            final duration = tempEndTime.difference(activeEvent.startTime);
+            final isValid = !tempEndTime.isBefore(activeEvent.startTime);
 
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 40,
-                    height: 5,
-                    margin: const EdgeInsets.only(bottom: 20, top: 10),
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: size.height * 0.9),
+                  child: Container(
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade400,
-                      borderRadius: BorderRadius.circular(10),
+                      color: Theme.of(context).colorScheme.surface,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                     ),
-                  ),
-                  Text(
-                    'Detener ${eventType.uiLabel}',
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
+                    padding: EdgeInsets.only(
+                      bottom: viewInsets.bottom + (20 * scale),
+                      left: 24 * scale,
+                      right: 24 * scale,
+                      top: 12 * scale,
                     ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16.0),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: eventType
-                            .getAccentColor(context)
-                            .withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Inicio: ${TimeUtils.formatTimeOnly(activeEvent.startTime)}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
+                          Container(
+                            width: 48 * scale,
+                            height: 5 * scale,
+                            margin: EdgeInsets.only(bottom: 20 * scale),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          Text(
+                            'Detener ${eventType.uiLabel}',
+                            style: TextStyle(
+                              fontSize: 22 * scale,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Padding(
+                            padding: EdgeInsets.symmetric(vertical: 24.0 * scale),
+                            child: Container(
+                              padding: EdgeInsets.all(16 * scale),
+                              decoration: BoxDecoration(
+                                color: eventType
+                                    .getAccentColor(context)
+                                    .withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(16 * scale),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Inicio: ${TimeUtils.formatTimeOnly(activeEvent.startTime)}',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 15 * scale,
+                                        ),
+                                      ),
+                                      SizedBox(height: 6 * scale),
+                                      Text(
+                                        'Duración: ${TimeUtils.formatDuration(duration)}',
+                                        style: TextStyle(
+                                          color: isValid
+                                              ? eventType.getAccentColor(context)
+                                              : Colors.red,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15 * scale,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  Icon(
+                                    eventType.icon,
+                                    color: eventType.getAccentColor(context),
+                                    size: 28 * scale,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          CustomTimePicker(
+                            time: tempEndTime,
+                            onTimeChanged: (newTime) =>
+                                setModalState(() => tempEndTime = newTime),
+                          ),
+                          if (!isValid)
+                            Padding(
+                              padding: EdgeInsets.only(top: 12.0 * scale),
+                              child: Text(
+                                'La hora de fin no puede ser anterior al inicio',
+                                style: TextStyle(
+                                  color: Colors.red.shade400,
+                                  fontSize: 13 * scale,
                                 ),
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Duración: ${TimeUtils.formatDuration(duration)}',
+                            ),
+                          SizedBox(height: 32 * scale),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 52 * scale,
+                            child: ElevatedButton(
+                              onPressed: isValid
+                                  ? () => Navigator.pop(ctx, tempEndTime)
+                                  : null,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Theme.of(context).colorScheme.primary,
+                                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                                disabledBackgroundColor: Colors.grey.shade300,
+                                disabledForegroundColor: Colors.grey.shade500,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16 * scale),
+                                ),
+                                elevation: isValid ? 2 : 0,
+                              ),
+                              child: Text(
+                                'Finalizar',
                                 style: TextStyle(
-                                  color: isValid
-                                      ? eventType.getAccentColor(context)
-                                      : Colors.red,
+                                  fontSize: 16 * scale,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                            ],
-                          ),
-                          Icon(
-                            eventType.icon,
-                            color: eventType.getAccentColor(context),
+                            ),
                           ),
                         ],
                       ),
                     ),
                   ),
-                  CustomTimePicker(
-                    time: tempEndTime,
-                    onTimeChanged: (newTime) =>
-                        setModalState(() => tempEndTime = newTime),
-                  ),
-                  if (!isValid)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 12.0),
-                      child: Text(
-                        'La hora de fin no puede ser anterior al inicio',
-                        style: TextStyle(color: Colors.red, fontSize: 12),
-                      ),
-                    ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: isValid
-                          ? () => Navigator.pop(ctx, tempEndTime)
-                          : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.indigo,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'Finalizar',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
+                ),
+              ),
+            );
+          },
         );
       },
     );

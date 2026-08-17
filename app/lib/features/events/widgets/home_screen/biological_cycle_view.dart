@@ -1,6 +1,4 @@
 import 'dart:ui';
-
-import 'package:app/core/utils/time_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -12,6 +10,9 @@ import 'package:app/features/events/widgets/visual_clock/visual_clock_view.dart'
 
 import 'day_sky_background.dart';
 import 'night_sky_background.dart';
+import 'header_icon_button.dart';
+import 'biological_action_bar.dart';
+import 'ongoing_event_banner.dart';
 
 class BiologicalCycleView extends ConsumerWidget {
   final String babyId;
@@ -31,14 +32,12 @@ class BiologicalCycleView extends ConsumerWidget {
     required this.onTapPrediction,
   });
 
-  // Fase del cielo día: 0.0 = 5h, 1.0 = 21h
   double _skyPhase() {
     final now = DateTime.now();
     final h = now.hour + now.minute / 60.0;
     return ((h - 5.0) / 16.0).clamp(0.0, 1.0);
   }
 
-  // Empieza a cambiar a las 16:30h, blanco puro a las 18:30h
   double _dayDarkness() {
     final now = DateTime.now();
     final h = now.hour + now.minute / 60.0;
@@ -62,7 +61,6 @@ class BiologicalCycleView extends ConsumerWidget {
   }
 
   double _dayTextShadow() {
-    // Sombra crece con la oscuridad del cielo para mantener contraste
     return 0.06 + _dayDarkness() * 0.36;
   }
 
@@ -91,95 +89,10 @@ class BiologicalCycleView extends ConsumerWidget {
     return dStr;
   }
 
-  // ─── Action bar helpers ────────────────────────────────────────────────────
-
-  List<Widget> _buildActionButtons({
-    required bool isNightMode,
-    required bool isNapActive,
-    required bool isWakingActive,
-    required DateTime? Function(EventType) getLastTimeFor,
-    required bool isLoading,
-  }) {
-    Widget btn(EventType type, {bool isDisabled = false}) => _actionButton(
-      type: type,
-      isNightMode: isNightMode,
-      isDisabled: isDisabled,
-      getLastTimeFor: getLastTimeFor,
-      isLoading: isLoading,
-    );
-
-    final divider = _divider(isNightMode);
-
-    if (isNightMode) {
-      return [
-        btn(EventType.bottle),
-        divider,
-        btn(EventType.nursing),
-        divider,
-        btn(EventType.diaper),
-        divider,
-        btn(EventType.nightWaking, isDisabled: isWakingActive),
-        divider,
-        btn(EventType.wokeUp, isDisabled: isWakingActive),
-      ];
-    }
-
-    return [
-      btn(EventType.bottle),
-      divider,
-      btn(EventType.solids),
-      divider,
-      btn(EventType.diaper),
-      divider,
-      btn(EventType.nap, isDisabled: isNapActive),
-      divider,
-      btn(EventType.bedtime, isDisabled: isNapActive),
-    ];
-  }
-
-  Widget _actionButton({
-    required EventType type,
-    required bool isNightMode,
-    required bool isDisabled,
-    required DateTime? Function(EventType) getLastTimeFor,
-    required bool isLoading,
-  }) {
-    return BiologicalActionButton(
-      eventType: type,
-      isNight: isNightMode,
-      isDisabled: isDisabled,
-      lastEventTime: getLastTimeFor(type),
-      isLoading: isLoading,
-      onTap: () => onTriggerAction(type),
-    );
-  }
-
-  Widget _divider(bool isNightMode) {
-    return Container(
-      width: 1,
-      height: 48,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.transparent,
-            isNightMode
-                ? Colors.white.withValues(alpha: 0.08)
-                : Colors.black.withValues(alpha: 0.07),
-            Colors.transparent,
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ─── Build ─────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     Intl.defaultLocale = 'es';
+    final size = MediaQuery.sizeOf(context);
     final now = DateTime.now();
     final todayArgs = (
       babyId: babyId,
@@ -187,11 +100,7 @@ class BiologicalCycleView extends ConsumerWidget {
     );
     final yesterdayArgs = (
       babyId: babyId,
-      date: DateTime(
-        now.year,
-        now.month,
-        now.day,
-      ).subtract(const Duration(days: 1)),
+      date: DateTime(now.year, now.month, now.day).subtract(const Duration(days: 1)),
     );
 
     final todayEventsAsync = ref.watch(dailyEventsProvider(todayArgs));
@@ -212,9 +121,7 @@ class BiologicalCycleView extends ConsumerWidget {
     final yesterdayEvents = yesterdayEventsAsync.asData?.value ?? [];
     final allEvents = [...todayEvents, ...yesterdayEvents]
       ..sort(
-        (a, b) => DateTime.parse(
-          b['start_time'],
-        ).compareTo(DateTime.parse(a['start_time'])),
+        (a, b) => DateTime.parse(b['start_time']).compareTo(DateTime.parse(a['start_time'])),
       );
 
     DateTime? lastWokeUp;
@@ -235,34 +142,6 @@ class BiologicalCycleView extends ConsumerWidget {
       isNightMode = lastBedTime.isAfter(lastWokeUp);
     } else if (lastBedTime != null) {
       isNightMode = true;
-    }
-
-    final pillBg = isNightMode
-        ? const Color(0xFF242746).withOpacity(0.7)
-        : Colors.white.withOpacity(0.65);
-    final pillText = isNightMode
-        ? const Color(0xFF8C9EFF)
-        : const Color(0xFF1565C0);
-    final textColorSec = isNightMode ? Colors.white54 : _dayTextSecondary();
-
-    String pillLabel;
-    if (isNightMode) {
-      final nightStart = lastBedTime ?? now;
-      final startStr = toBeginningOfSentenceCase(
-        DateFormat("EEEE, d 'de' MMMM").format(nightStart),
-      );
-      final endStr = toBeginningOfSentenceCase(
-        DateFormat(
-          "EEEE, d 'de' MMMM",
-        ).format(nightStart.add(const Duration(days: 1))),
-      );
-      pillLabel = '$startStr – $endStr';
-    } else {
-      pillLabel =
-          toBeginningOfSentenceCase(
-            DateFormat("EEEE, d 'de' MMMM").format(now),
-          ) ??
-          '';
     }
 
     DateTime cycleStart = isNightMode
@@ -305,9 +184,7 @@ class BiologicalCycleView extends ConsumerWidget {
     }).toList();
 
     final isNapActive = ongoingEvents.any((e) => e['category'] == 'nap');
-    final isWakingActive = ongoingEvents.any(
-      (e) => e['category'] == 'night_waking',
-    );
+    final isWakingActive = ongoingEvents.any((e) => e['category'] == 'night_waking');
 
     DateTime? getLastTimeFor(EventType type) {
       if (lastEventsAsync.isLoading || lastEventsAsync.hasError) return null;
@@ -322,8 +199,7 @@ class BiologicalCycleView extends ConsumerWidget {
         final dirtyDate = dirty != null ? DateTime.tryParse(dirty) : null;
 
         DateTime? latest = wetDate;
-        if (dirtyDate != null &&
-            (latest == null || dirtyDate.isAfter(latest))) {
+        if (dirtyDate != null && (latest == null || dirtyDate.isAfter(latest))) {
           latest = dirtyDate;
         }
         isoString = latest?.toIso8601String();
@@ -342,7 +218,6 @@ class BiologicalCycleView extends ConsumerWidget {
           default:
             key = type.backendCategory;
         }
-
         isoString = eventsMap[key] as String?;
       }
 
@@ -358,16 +233,16 @@ class BiologicalCycleView extends ConsumerWidget {
             child: Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 16,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: size.width * 0.05,
+                    vertical: size.height * 0.02,
                   ),
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
                       Align(
                         alignment: Alignment.centerLeft,
-                        child: _HeaderIconButton(
+                        child: HeaderIconButton(
                           icon: Icons.person_outline_rounded,
                           isNightMode: isNightMode,
                           dayIconColor: _dayTextPrimary().withOpacity(0.75),
@@ -379,9 +254,9 @@ class BiologicalCycleView extends ConsumerWidget {
                         child: BackdropFilter(
                           filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 6,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: size.width * 0.04,
+                              vertical: size.height * 0.008,
                             ),
                             decoration: BoxDecoration(
                               color: isNightMode
@@ -402,9 +277,7 @@ class BiologicalCycleView extends ConsumerWidget {
                                   Text(
                                     babyName,
                                     style: TextStyle(
-                                      color: isNightMode
-                                          ? Colors.white
-                                          : _dayTextPrimary(),
+                                      color: isNightMode ? Colors.white : _dayTextPrimary(),
                                       fontSize: 15,
                                       fontWeight: FontWeight.w800,
                                       letterSpacing: 0.2,
@@ -424,7 +297,7 @@ class BiologicalCycleView extends ConsumerWidget {
                                     style: TextStyle(
                                       color: isNightMode
                                           ? Colors.white.withOpacity(0.65)
-                                          :  _dayTextSecondary(),
+                                          : _dayTextSecondary(),
                                       fontSize: 11,
                                       fontWeight: FontWeight.w600,
                                       shadows: [
@@ -444,7 +317,7 @@ class BiologicalCycleView extends ConsumerWidget {
                       ),
                       Align(
                         alignment: Alignment.centerRight,
-                        child: _HeaderIconButton(
+                        child: HeaderIconButton(
                           icon: Icons.calendar_today_rounded,
                           isNightMode: isNightMode,
                           dayIconColor: _dayTextPrimary().withOpacity(0.75),
@@ -454,45 +327,10 @@ class BiologicalCycleView extends ConsumerWidget {
                     ],
                   ),
                 ),
-                Container(
-                  margin: const EdgeInsets.only(bottom: 36),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: pillBg,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        isNightMode
-                            ? Icons.nights_stay
-                            : Icons.wb_sunny_rounded,
-                        color: pillText,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        pillLabel,
-                        style: TextStyle(
-                          color: pillText,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
                 Expanded(
                   child: VisualClockView(
                     events: List<Map<String, dynamic>>.from(todayEvents),
-                    yesterdayEvents: List<Map<String, dynamic>>.from(
-                      yesterdayEvents,
-                    ),
+                    yesterdayEvents: List<Map<String, dynamic>>.from(yesterdayEvents),
                     selectedDate: DateTime(now.year, now.month, now.day),
                     sleepPrediction: sleepPredictionAsync.asData?.value,
                     wakePrediction: wakePredictionAsync.asData?.value,
@@ -503,481 +341,38 @@ class BiologicalCycleView extends ConsumerWidget {
                     onTapPrediction: onTapPrediction,
                   ),
                 ),
-                Container(
-                  margin: const EdgeInsets.only(
-                    top: 24,
-                    left: 60,
-                    right: 60,
-                    bottom: 16,
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(22),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 6,
-                          horizontal: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(22),
-                          gradient: isNightMode
-                              ? LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    const Color(
-                                      0xFF1E2235,
-                                    ).withValues(alpha: 0.80),
-                                    const Color(
-                                      0xFF141625,
-                                    ).withValues(alpha: 0.90),
-                                  ],
-                                )
-                              : LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    Colors.white.withValues(alpha: 0.75),
-                                    const Color(
-                                      0xFFF8F6FF,
-                                    ).withValues(alpha: 0.65),
-                                  ],
-                                ),
-                          border: Border.all(
-                            color: isNightMode
-                                ? Colors.white.withValues(alpha: 0.08)
-                                : Colors.white.withValues(alpha: 0.60),
-                            width: 1,
-                          ),
-                          boxShadow: isNightMode
-                              ? [
-                                  BoxShadow(
-                                    color: const Color(
-                                      0xFF0A0D1A,
-                                    ).withValues(alpha: 0.50),
-                                    blurRadius: 24,
-                                    spreadRadius: -4,
-                                    offset: const Offset(0, 8),
-                                  ),
-                                  BoxShadow(
-                                    color: const Color(
-                                      0xFF6C6FD4,
-                                    ).withValues(alpha: 0.08),
-                                    blurRadius: 32,
-                                    spreadRadius: 0,
-                                    offset: const Offset(0, 0),
-                                  ),
-                                ]
-                              : [
-                                  BoxShadow(
-                                    color: const Color(
-                                      0xFFB8AADD,
-                                    ).withValues(alpha: 0.20),
-                                    blurRadius: 20,
-                                    spreadRadius: -2,
-                                    offset: const Offset(0, 6),
-                                  ),
-                                  BoxShadow(
-                                    color: Colors.white.withValues(alpha: 0.80),
-                                    blurRadius: 0,
-                                    spreadRadius: 0,
-                                    offset: const Offset(0, -1),
-                                  ),
-                                ],
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: _buildActionButtons(
-                            isNightMode: isNightMode,
-                            isNapActive: isNapActive,
-                            isWakingActive: isWakingActive,
-                            getLastTimeFor: getLastTimeFor,
-                            isLoading: lastEventsAsync.isLoading,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                BiologicalActionBar(
+                  isNightMode: isNightMode,
+                  isNapActive: isNapActive,
+                  isWakingActive: isWakingActive,
+                  isLoading: lastEventsAsync.isLoading,
+                  getLastTimeFor: getLastTimeFor,
+                  onTriggerAction: onTriggerAction,
                 ),
-                SizedBox(
-                  height: 150,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: ongoingEvents
-                        .map(
-                          (e) => OngoingEventBanner(
-                            event: e,
-                            isNightMode: isNightMode,
-                            onTap: () => onTapEvent(e),
-                            onStop: () => onStopEvent(e),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class OngoingEventBanner extends StatelessWidget {
-  final Map<String, dynamic> event;
-  final bool isNightMode;
-  final VoidCallback onTap;
-  final VoidCallback onStop;
-
-  const OngoingEventBanner({
-    super.key,
-    required this.event,
-    required this.isNightMode,
-    required this.onTap,
-    required this.onStop,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cat = event['category'];
-    final meta = (event['metadata'] as Map<String, dynamic>?) ?? {};
-    final type = EventType.fromBackend(cat, meta);
-    final startTime = DateTime.parse(event['start_time']).toLocal();
-    final isNap = cat == 'nap';
-    
-    final predictedStartStr = meta['predicted_start_time'] as String?;
-    final predictedEndStr = meta['predicted_end_time'] as String?;
-    final hasPrediction = predictedStartStr != null && predictedEndStr != null;
-
-    final textColor = isNightMode ? Colors.white : const Color(0xFF2D3142);
-    final subTextColor = isNightMode ? Colors.white70 : const Color(0xFF546E7A);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: isNightMode
-                  ? type.getAccentColor(context).withOpacity(0.6)
-                  : type.getAccentColor(context).withOpacity(0.4),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: type
-                    .getAccentColor(context)
-                    .withOpacity(isNightMode ? 0.4 : 0.3),
-                width: 1,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: type.getAccentColor(context),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(type.icon, color: Colors.white, size: 20),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
+                if (ongoingEvents.isNotEmpty)
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: size.height * 0.25),
+                    child: SingleChildScrollView(
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${type.uiLabel} en curso',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 14,
-                              color: textColor,
-                            ),
-                          ),
-                          StreamBuilder(
-                            stream: Stream.periodic(const Duration(minutes: 1)),
-                            builder: (context, _) {
-                              final diff = DateTime.now().difference(startTime);
-                              final h = diff.inHours;
-                              final m = diff.inMinutes % 60;
-                              final timeStr = h > 0 ? '${h}h ${m}m' : '$m min';
-                              return Text(
-                                'Iniciado hace $timeStr',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: subTextColor,
-                                ),
-                              );
-                            },
-                          ),
-                        ],
+                        mainAxisSize: MainAxisSize.min,
+                        children: ongoingEvents
+                            .map(
+                              (e) => OngoingEventBanner(
+                                event: e,
+                                isNightMode: isNightMode,
+                                onTap: () => onTapEvent(e),
+                                onStop: () => onStopEvent(e),
+                              ),
+                            )
+                            .toList(),
                       ),
                     ),
-                    GestureDetector(
-                      onTap: onStop,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: type.getAccentColor(context),
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: type
-                                  .getAccentColor(context)
-                                  .withOpacity(0.3),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: const Text(
-                          'Detener',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                // ── Nap progress bar ─────────────────────────────────────────
-                if (isNap && hasPrediction) ...[
-                  const SizedBox(height: 10),
-                  StreamBuilder(
-                    stream: Stream.periodic(const Duration(minutes: 1)),
-                    builder: (context, _) {
-                      final now = DateTime.now();
-                      final elapsed = now.difference(startTime).inMinutes;
-
-                      // Parsear a DateTime local
-                      final pStart = DateTime.parse(predictedStartStr).toLocal();
-                      final pEnd = DateTime.parse(predictedEndStr).toLocal();
-
-                      // Duración predicha en base a los timestamps
-                      final totalRaw = pEnd.difference(pStart).inMinutes.toDouble();
-                      final total = totalRaw > 0 ? totalRaw : 1.0; // Evitar división por 0
-                      
-                      final progress = (elapsed / total).clamp(0.0, 1.0);
-                      
-                      // Calcular el estado respecto a la HORA DE FIN predicha
-                      final remainingMins = pEnd.difference(now).inMinutes;
-                      final isOverdue = remainingMins < 0;
-                      final overdueMins = isOverdue ? -remainingMins : 0;
-                      
-                      final accentColor = type.getAccentColor(context);
-
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(999),
-                            child: Stack(
-                              children: [
-                                // Track
-                                Container(
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    color: accentColor.withOpacity(
-                                      isNightMode ? 0.20 : 0.15,
-                                    ),
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                ),
-                                // Fill
-                                FractionallySizedBox(
-                                  widthFactor: progress,
-                                  child: Container(
-                                    height: 6,
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(999),
-                                      gradient: LinearGradient(
-                                        colors: isOverdue
-                                            ? [
-                                                accentColor.withOpacity(0.6),
-                                                accentColor,
-                                              ]
-                                            : [
-                                                accentColor.withOpacity(0.7),
-                                                accentColor,
-                                              ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 5),
-                          Text(
-                            isOverdue
-                                ? 'Siesta más larga de lo previsto (+${TimeUtils.formatMinutes(overdueMins)})'
-                                : 'Tiempo restante estimado: ${TimeUtils.formatMinutes(remainingMins)}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: isOverdue ? accentColor : subTextColor,
-                            ),
-                          ),
-                        ],
-                      );
-                    },
                   ),
-                ],
+                SizedBox(height: size.height * 0.02),
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class BiologicalActionButton extends StatelessWidget {
-  final EventType eventType;
-  final bool isNight;
-  final bool isDisabled;
-  final DateTime? lastEventTime;
-  final bool isLoading;
-  final VoidCallback onTap;
-
-  const BiologicalActionButton({
-    super.key,
-    required this.eventType,
-    required this.isNight,
-    this.isDisabled = false,
-    this.lastEventTime,
-    this.isLoading = false,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final eventColor = eventType.getAccentColor(context);
-
-    return Opacity(
-      opacity: isDisabled ? 0.35 : 1.0,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: isDisabled ? null : onTap,
-              customBorder: const CircleBorder(),
-              child: Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Theme.of(context).colorScheme.surface,
-                  border: Border.all(
-                    color: eventColor.withValues(alpha: 0.75),
-                    width: 1.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Icon(eventType.icon, color: eventColor, size: 12),
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          _buildTimeLabel(eventColor),
         ],
-      ),
-    );
-  }
-
-  Widget _buildTimeLabel(Color color) {
-    final textStyle = TextStyle(
-      color: color,
-      fontSize: 10,
-      fontWeight: FontWeight.w800,
-      letterSpacing: 0.2,
-    );
-
-    if (isLoading) return Text('...', style: textStyle);
-    if (lastEventTime == null) return Text('--', style: textStyle);
-
-    return StreamBuilder(
-      stream: Stream.periodic(const Duration(minutes: 1)),
-      builder: (context, _) {
-        final diff = DateTime.now().difference(lastEventTime!);
-        String timeStr = 'Ahora';
-        if (diff.inDays > 0) {
-          timeStr = '${diff.inDays}d';
-        } else if (diff.inHours > 0) {
-          final mins = diff.inMinutes.remainder(60);
-          timeStr = mins > 0 ? '${diff.inHours}h ${mins}m' : '${diff.inHours}h';
-        } else if (diff.inMinutes > 0) {
-          timeStr = '${diff.inMinutes}m';
-        }
-        return Text(timeStr, style: textStyle);
-      },
-    );
-  }
-}
-
-class _HeaderIconButton extends StatelessWidget {
-  final IconData icon;
-  final bool isNightMode;
-  final Color dayIconColor; 
-  final VoidCallback onTap;
-
-  const _HeaderIconButton({
-    required this.icon,
-    required this.isNightMode,
-    required this.dayIconColor,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: isNightMode
-              ? Colors.black.withOpacity(0.22)
-              : Colors.white.withOpacity(0.30),
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: isNightMode
-                ? Colors.white.withOpacity(0.10)
-                : Colors.white.withOpacity(0.50),
-            width: 0.5,
-          ),
-        ),
-        child: Icon(
-          icon,
-          size: 20,
-          color: isNightMode
-              ? Colors.white.withOpacity(0.80)
-              : dayIconColor,
-        ),
       ),
     );
   }

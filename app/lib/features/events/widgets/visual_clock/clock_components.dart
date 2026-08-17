@@ -6,34 +6,37 @@ import 'clock_palette.dart';
 
 /// Etiqueta de hora (inicio / fin del arco)
 class TimeLabel extends StatelessWidget {
-  final String time;
-  const TimeLabel(this.time, {super.key});
+  final String text;
+  final Color? color;
+  final double scale;
+
+  const TimeLabel(this.text, {super.key, this.color, this.scale = 1.0});
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    width: 52,
-    child: Text(
-      time,
+  Widget build(BuildContext context) {
+    return Text(
+      text,
       textAlign: TextAlign.center,
-      style: const TextStyle(
-        fontSize: 11,
+      style: TextStyle(
+        fontSize: 13 * scale,
         fontWeight: FontWeight.w600,
-        letterSpacing: 0.2,
-        color: ClockPalette.textMuted,
+        color: color ?? ClockPalette.textPrimary,
+        height: 1.0,
       ),
-    ),
-  );
+    );
+  }
 }
 
-/// Icono circular de evento
 class EventIcon extends StatelessWidget {
   final EventType eventType;
   final bool isPrediction;
-  
+  final double scale;
+
   const EventIcon({
     super.key, 
     required this.eventType,
     this.isPrediction = false,
+    this.scale = 1.0,
   });
 
   @override
@@ -41,20 +44,20 @@ class EventIcon extends StatelessWidget {
     final borderColor = eventType.getAccentColor(context).withOpacity(0.75);
 
     Widget innerContainer = Container(
-      width: 34,
-      height: 34,
+      width: 34 * scale,
+      height: 34 * scale,
       decoration: BoxDecoration(
         color: ClockPalette.surface,
         shape: BoxShape.circle,
         border: isPrediction ? null : Border.all(
           color: borderColor,
-          width: 1.5,
+          width: 1.5 * scale,
         ),
         boxShadow: isPrediction ? [] : [
           BoxShadow(
             color: Colors.black.withOpacity(0.35),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+            blurRadius: 6 * scale,
+            offset: Offset(0, 2 * scale),
           ),
         ],
       ),
@@ -62,20 +65,24 @@ class EventIcon extends StatelessWidget {
         alignment: Alignment.center,
         clipBehavior: Clip.none,
         children: [
-          Icon(eventType.icon, size: 16, color: eventType.getAccentColor(context)),
+          Icon(
+            eventType.icon, 
+            size: 16 * scale, 
+            color: eventType.getAccentColor(context),
+          ),
           if (isPrediction)
             Positioned(
-              top: -4,
-              right: -4,
+              top: -4 * scale,
+              right: -4 * scale,
               child: Container(
-                padding: const EdgeInsets.all(2),
+                padding: EdgeInsets.all(2 * scale),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: ClockPalette.surface,
                 ),
                 child: Icon(
                   Icons.auto_awesome_rounded,
-                  size: 10,
+                  size: 10 * scale,
                   color: Colors.amber.shade500,
                 ),
               ),
@@ -86,7 +93,7 @@ class EventIcon extends StatelessWidget {
 
     if (isPrediction) {
       return CustomPaint(
-        painter: _DashedCirclePainter(color: borderColor, strokeWidth: 1.5),
+        painter: _DashedCirclePainter(color: borderColor, strokeWidth: 1.5 * scale),
         child: innerContainer,
       );
     }
