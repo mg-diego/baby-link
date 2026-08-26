@@ -13,85 +13,61 @@ class HomeAssistantService:
     async def get_summary(self, baby_id: str) -> Dict[str, Any]:
         baby_name = "Ona"
         today = date.today()
+        now_utc = datetime.now(timezone.utc)
+        today_start = datetime.combine(today, datetime.min.time(), tzinfo=timezone.utc)
+        today_end = datetime.combine(today, datetime.max.time(), tzinfo=timezone.utc)
 
         all_recent_events = self.event_repository.get_recent_events(baby_id) or []
         
-        today_events = []
-        bed_time_today = None
-        
-        for event in all_recent_events:
-            start_str = event.get('start_time')
-            end_str = event.get('end_time')
-            
-            is_today = False
-            if start_str:
-                start_date = datetime.fromisoformat(start_str.replace('Z', '+00:00')).date()
-                if start_date == today:
-                    is_today = True
-            
-            if end_str and not is_today:
-                end_date = datetime.fromisoformat(end_str.replace('Z', '+00:00')).date()
-                if end_date == today:
-                    is_today = True
-            
-            if start_str and not end_str:
-                is_today = True
+        total_sleep_mins = 0
+        total_feeds = 0
+        total_diapers = 0
 
-            if is_today:
-                today_events.append(event)
+        for event in all_recent_events:
+            category = event.get("category")
+            start_str = event.get("start_time")
+            if not start_str:
+                continue
+
+            start_dt = datetime.fromisoformat(start_str.replace('Z', '+00:00'))
+            end_str = event.get("end_time")
+
+            if category in [EventCategory.NAP.value, EventCategory.BED_TIME.value]:
+                end_dt = datetime.fromisoformat(end_str.replace('Z', '+00:00')) if end_str else now_utc
                 
-            if event.get('category') == EventCategory.BED_TIME.value:
-                if not end_str or (end_str and is_today):
-                    if not bed_time_today or start_str > bed_time_today.get('start_time', ''):
-                        bed_time_today = event
+                if (now_utc - start_dt).total_seconds() < 172800:
+                    if end_dt > today_start and start_dt <= today_end:
+                        overlap_start = max(start_dt, today_start)
+                        overlap_end = min(end_dt, today_end)
+                        if overlap_end > overlap_start:
+                            total_sleep_mins += int((overlap_end - overlap_start).total_seconds() / 60)
+                            
+            elif start_dt.date() == today:
+                if category == EventCategory.FEED.value:
+                    total_feeds += 1
+                elif category == EventCategory.DIAPER.value:
+                    condition = str(event.get("metadata", {}).get("condition", "")).lower()
+                    if condition in ["dirty", "mixed", "wet", "caca", "pipi"]:
+                        total_diapers += 1
 
         is_sleeping = False
         current_sleep_type = None
         sleeping_since = None
 
         active_naps = self.event_repository.get_active_events(baby_id, category=EventCategory.NAP.value) or []
-        
-        active_nap = None
-        for event in active_naps:
-            if not event.get('end_time'):
-                active_nap = event
-                break
+        active_nap = next((e for e in active_naps if not e.get('end_time')), None)
+
+        active_beds = self.event_repository.get_active_events(baby_id, category=EventCategory.BED_TIME.value) or []
+        active_bed = next((e for e in active_beds if not e.get('end_time')), None)
 
         if active_nap:
             is_sleeping = True
             current_sleep_type = "Siesta"
             sleeping_since = active_nap.get('start_time')
-        elif bed_time_today and not bed_time_today.get('end_time'):
+        elif active_bed:
             is_sleeping = True
             current_sleep_type = "Noche"
-            sleeping_since = bed_time_today.get('start_time')
-
-        total_sleep_mins = 0
-        total_feeds = 0
-        total_diapers = 0
-
-        for event in today_events:
-            category = event.get("category")
-            metadata = event.get("metadata", {})
-
-            if category in [EventCategory.NAP.value, EventCategory.BED_TIME.value]:
-                start_str = event.get("start_time")
-                end_str = event.get("end_time")
-                
-                if start_str:
-                    start_dt = datetime.fromisoformat(start_str.replace('Z', '+00:00'))
-                    end_dt = datetime.now(timezone.utc)
-                    if end_str:
-                        end_dt = datetime.fromisoformat(end_str.replace('Z', '+00:00'))
-                    
-                    total_sleep_mins += int((end_dt - start_dt).total_seconds() / 60)
-            
-            elif category == EventCategory.FEED.value:
-                total_feeds += 1
-            elif category == EventCategory.DIAPER.value:
-                condition = str(metadata.get("condition", "")).lower()
-                if condition in ["dirty", "mixed", "wet", "caca", "pipi"]:
-                    total_diapers += 1
+            sleeping_since = active_bed.get('start_time')
 
         last_feed_event = None
         last_diaper_event = None
@@ -113,7 +89,7 @@ class HomeAssistantService:
                     "time": event.get('start_time'),
                     "condition": metadata.get('condition', 'clean')
                 }
-            
+                
             if last_feed_event and last_diaper_event:
                 break
 
