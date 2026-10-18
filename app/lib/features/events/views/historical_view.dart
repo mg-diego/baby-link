@@ -110,7 +110,19 @@ class _HistoricalViewState extends ConsumerState<HistoricalView>
     final textSec = isDark ? const Color(0xFF7986CB) : const Color(0xFF546E7A);
     const primary = Color(0xFF4A90D9);
 
-    return Scaffold(
+    // Espacio que ocupa el menú flotante inferior (navbar de MainScreen), para
+    // que el contenido no quede tapado por él (MainScreen usa extendBody).
+    final bottomReserve = MediaQuery.paddingOf(context).bottom + 88;
+
+    return PopScope(
+      // La vista histórica no es una ruta propia (se muestra alternando un flag
+      // en HomeScreen), así que interceptamos el botón Atrás para volver al
+      // ciclo en lugar de cerrar la app.
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) widget.onBack();
+      },
+      child: Scaffold(
       backgroundColor: bgColor,
 
       // ── AppBar custom ──────────────────────────────────────────────────────
@@ -159,7 +171,7 @@ class _HistoricalViewState extends ConsumerState<HistoricalView>
                 final yesterdayEvents = eventsYdayAsync.asData?.value ?? [];
                 if (_viewMode == 0) {
                   return Padding(
-                    padding: const EdgeInsets.only(top: 60),
+                    padding: EdgeInsets.only(top: 16, bottom: bottomReserve),
                     child: VisualClockView(
                       key: ValueKey('clock_${events.hashCode}'),
                       events: List<Map<String, dynamic>>.from(events),
@@ -170,7 +182,7 @@ class _HistoricalViewState extends ConsumerState<HistoricalView>
                       sleepPrediction: sleepPredAsync.asData?.value,
                       wakePrediction: wakePredAsync.asData?.value,
                       isLearning: sleepPredAsync.asData?.value == null,
-                      alignment: Alignment.topCenter,
+                      alignment: Alignment.center,
                     ),
                   );
                 }
@@ -181,6 +193,7 @@ class _HistoricalViewState extends ConsumerState<HistoricalView>
                     yesterdayEvents,
                   ),
                   isToday: isToday,
+                  bottomPadding: bottomReserve,
                   onRefresh: widget.onRefresh,
                   onDelete: widget.onDelete,
                   onTap: widget.onTap,
@@ -189,6 +202,7 @@ class _HistoricalViewState extends ConsumerState<HistoricalView>
             ),
           ),
         ],
+      ),
       ),
     );
   }

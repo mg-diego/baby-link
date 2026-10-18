@@ -5,6 +5,7 @@ class EventListView extends StatefulWidget {
   final List<Map<String, dynamic>> initialEvents;
   final List<Map<String, dynamic>> yesterdayEvents;
   final bool isToday;
+  final double bottomPadding;
   final Future<void> Function() onRefresh;
   final void Function(Map<String, dynamic>) onDelete;
   final void Function(Map<String, dynamic>) onTap;
@@ -14,6 +15,7 @@ class EventListView extends StatefulWidget {
     required this.initialEvents,
     required this.yesterdayEvents,
     required this.isToday,
+    this.bottomPadding = 20,
     required this.onRefresh,
     required this.onDelete,
     required this.onTap,
@@ -80,7 +82,7 @@ class _EventListViewState extends State<EventListView> {
   @override
   Widget build(BuildContext context) {
     if (_events.isEmpty) {
-      return _EmptyState(isToday: widget.isToday);
+      return _EmptyState(isToday: widget.isToday, bottomPadding: widget.bottomPadding);
     }
 
     final sorted = List<Map<String, dynamic>>.from(_events)
@@ -139,7 +141,7 @@ class _EventListViewState extends State<EventListView> {
       onRefresh: widget.onRefresh,
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+        padding: EdgeInsets.fromLTRB(20, 20, 20, widget.bottomPadding),
         itemCount: listItems.length,
         itemBuilder: (context, index) => listItems[index],
       ),
@@ -182,11 +184,14 @@ class _SeparatorItem extends StatelessWidget {
 
 class _EmptyState extends StatelessWidget {
   final bool isToday;
-  const _EmptyState({required this.isToday});
+  final double bottomPadding;
+  const _EmptyState({required this.isToday, this.bottomPadding = 0});
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomPadding),
+      child: Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -194,6 +199,7 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 12),
           Text(isToday ? 'Aún no hay eventos hoy.' : 'Sin eventos este día.', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4), fontSize: 15)),
         ],
+      ),
       ),
     );
   }

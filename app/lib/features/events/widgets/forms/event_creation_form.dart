@@ -5,16 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:app/shared/models/event_type.dart';
 import 'package:app/features/events/providers/events_provider.dart';
 import 'package:app/features/events/services/event_action_service.dart';
-import 'package:app/features/events/widgets/forms/basic_notes_form.dart';
-import 'package:app/features/events/widgets/forms/bed_time_form.dart';
-import 'package:app/features/events/widgets/forms/bottle_form.dart';
-import 'package:app/features/events/widgets/forms/diaper_form.dart';
-import 'package:app/features/events/widgets/forms/growth_form.dart';
+import 'package:app/features/events/widgets/forms/event_form_factory.dart';
 import 'package:app/features/events/widgets/forms/nursing_form.dart';
 import 'package:app/features/events/widgets/forms/placeholder_form.dart';
-import 'package:app/features/events/widgets/forms/solids_form.dart';
-import 'package:app/features/events/widgets/forms/temperature_form.dart';
-import 'package:app/features/events/widgets/forms/wake_up_form.dart';
 
 class EventCreationSheet extends ConsumerStatefulWidget {
   final String babyId;
@@ -78,6 +71,9 @@ class _EventCreationSheetState extends ConsumerState<EventCreationSheet> {
 
       if (bedTimePrediction != null) {
         finalMeta['predicted_start_time'] = bedTimePrediction.start.toUtc().toIso8601String();
+        if (bedTimePrediction.end != null) {
+          finalMeta['predicted_end_time'] = bedTimePrediction.end!.toUtc().toIso8601String();
+        }
       }
     }
 
@@ -231,15 +227,6 @@ class _EventCreationSheetState extends ConsumerState<EventCreationSheet> {
       );
     } 
     
-    if (widget.eventType == EventType.wokeUp) {
-      return WakeUpForm(onSave: _saveAndClose);
-    } 
-    if (widget.eventType == EventType.bedtime) {
-      return BedtimeForm(onSave: _saveAndClose);
-    } 
-    if (widget.eventType == EventType.bottle) {
-      return BottleForm(lastMilkType: lastMilkType, onSave: _saveAndClose);
-    } 
     if (widget.eventType == EventType.nursing) {
       return NursingForm(
         onSave: (meta, time, [end]) async {
@@ -260,23 +247,14 @@ class _EventCreationSheetState extends ConsumerState<EventCreationSheet> {
           }
         },
       );
-    } 
-    if (widget.eventType == EventType.solids) {
-      return SolidsForm(onSave: _saveAndClose);
-    } 
-    if (widget.eventType == EventType.diaper) {
-      return DiaperForm(onSave: _saveAndClose);
-    } 
-    if (widget.eventType == EventType.temperature) {
-      return TemperatureForm(onSave: _saveAndClose);
-    } 
-    if (widget.eventType == EventType.medicine || widget.eventType == EventType.bath) {
-      return BasicNotesForm(onSave: _saveAndClose);
-    } 
-    if (widget.eventType == EventType.growth) {
-      return GrowthForm(onSave: _saveAndClose);
     }
 
-    return PlaceholderForm(title: widget.eventType.uiLabel, onSave: _saveAndClose);
+    // El resto de tipos usa el mapeo compartido con la edición.
+    return EventFormFactory.buildSimpleForm(
+          eventType: widget.eventType,
+          lastMilkType: lastMilkType,
+          onSave: _saveAndClose,
+        ) ??
+        PlaceholderForm(title: widget.eventType.uiLabel, onSave: _saveAndClose);
   }
 }

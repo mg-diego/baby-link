@@ -1,12 +1,11 @@
-import 'package:app/features/events/widgets/forms/event_creation_form.dart';
 import 'package:app/features/events/widgets/forms/event_edit_form.dart';
 import 'package:app/features/events/widgets/home_screen/prediction_info_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:app/core/utils/duration_event_handler.dart';
 import 'package:app/shared/models/event_type.dart';
 import 'package:app/features/events/services/event_action_service.dart';
+import 'package:app/features/events/views/event_form_launcher.dart';
 import 'package:app/features/events/views/historical_view.dart';
 import 'package:app/features/events/widgets/home_screen/biological_cycle_view.dart';
 
@@ -75,28 +74,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   void _showEventForm(EventType eventType) {
-    if (eventType == EventType.nap ||
-        eventType == EventType.nightWaking ||
-        eventType == EventType.pumping) {
-      DurationEventHandler.handleAction(
-        context: context,
-        ref: ref,
-        babyId: widget.babyId,
-        eventType: eventType,
-        onSuccess: () => ref.read(eventActionProvider).refreshLists(widget.babyId),
-      );
-      return;
-    }
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => EventCreationSheet(
-        babyId: widget.babyId,
-        eventType: eventType,
-      ),
-    );
+    launchEventForm(context, ref, widget.babyId, eventType);
   }
 
   void _showPredictionInfo() {

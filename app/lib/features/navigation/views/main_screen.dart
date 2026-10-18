@@ -1,6 +1,7 @@
 import 'package:app/core/network/api_service.dart';
 import 'package:app/features/analytics/views/stats_screen.dart';
 import 'package:app/features/events/providers/events_provider.dart';
+import 'package:app/features/events/views/event_form_launcher.dart';
 import 'package:app/features/events/views/event_logger_sheet.dart';
 import 'package:app/features/milestones/views/milestones_screen.dart';
 import 'package:flutter/material.dart';
@@ -51,12 +52,20 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   void _onNavTap(int index) {
     if (index == 2) {
       HapticFeedback.mediumImpact();
+      final babyId = widget.baby["id"].toString();
       showModalBottomSheet(
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
-        builder: (ctx) =>
-            EventLoggerSheet(babyId: widget.baby["id"].toString()),
+        builder: (ctx) => EventLoggerSheet(
+          babyId: babyId,
+          onSelect: (eventType) {
+            // Cerramos la lista y abrimos el formulario desde el contexto
+            // estable de MainScreen (válido tras cerrar el sheet).
+            Navigator.pop(ctx);
+            launchEventForm(context, ref, babyId, eventType);
+          },
+        ),
       );
       return;
     }

@@ -94,7 +94,7 @@ class _EventCardState extends State<EventCard> with SingleTickerProviderStateMix
       key: ValueKey('dismiss_${widget.event['id']}'),
       direction: DismissDirection.endToStart,
       background: Container(
-        margin: const EdgeInsets.only(bottom: 12),
+        margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
           color: Colors.red.shade900,
           borderRadius: BorderRadius.circular(16),
@@ -121,7 +121,7 @@ class _EventCardState extends State<EventCard> with SingleTickerProviderStateMix
       ),
       onDismissed: (_) => widget.onDelete(),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
+        margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
           color: isOngoing ? accent.withOpacity(0.08) : eventType.getBackgroundColor(context),
           borderRadius: BorderRadius.circular(16),
@@ -141,20 +141,20 @@ class _EventCardState extends State<EventCard> with SingleTickerProviderStateMix
             onTap: widget.onTap,
             borderRadius: BorderRadius.circular(16),
             child: Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(10),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Container(
-                    width: 48, 
-                    height: 48,
+                    width: 40,
+                    height: 40,
                     decoration: BoxDecoration(
-                      color: accent.withOpacity(0.12), 
-                      borderRadius: BorderRadius.circular(14)
+                      color: accent.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12)
                     ),
-                    child: Icon(eventType.icon, color: accent, size: 24),
+                    child: Icon(eventType.icon, color: accent, size: 20),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 12),
                   
                   Expanded(
                     child: Column(
@@ -163,10 +163,10 @@ class _EventCardState extends State<EventCard> with SingleTickerProviderStateMix
                         Row(
                           children: [
                             Text(
-                              eventType.uiLabel, 
+                              eventType.uiLabel,
                               style: TextStyle(
-                                fontWeight: FontWeight.w700, 
-                                fontSize: 16, 
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
                                 color: onSurface.withOpacity(0.9),
                                 letterSpacing: -0.2,
                               )
@@ -179,7 +179,7 @@ class _EventCardState extends State<EventCard> with SingleTickerProviderStateMix
                         ),
                         
                         if (durationLabel != null || metaStr.isNotEmpty) ...[
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 4),
                           Text.rich(
                             TextSpan(
                               children: [
@@ -224,15 +224,15 @@ class _EventCardState extends State<EventCard> with SingleTickerProviderStateMix
                       ],
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
 
                   Text(
                     timeDisplay,
                     style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800, 
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
                       color: onSurface.withOpacity(0.85),
-                      letterSpacing: -0.5, 
+                      letterSpacing: -0.5,
                     ),
                   ),
                 ],

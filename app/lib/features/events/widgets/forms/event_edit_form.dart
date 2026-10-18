@@ -3,17 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:app/shared/models/event_type.dart';
 import 'package:app/features/events/services/event_action_service.dart';
-import 'package:app/features/events/widgets/forms/basic_notes_form.dart';
-import 'package:app/features/events/widgets/forms/bed_time_form.dart';
-import 'package:app/features/events/widgets/forms/bottle_form.dart';
-import 'package:app/features/events/widgets/forms/diaper_form.dart';
 import 'package:app/features/events/widgets/forms/duration_edit_form.dart';
-import 'package:app/features/events/widgets/forms/growth_form.dart';
+import 'package:app/features/events/widgets/forms/event_form_factory.dart';
 import 'package:app/features/events/widgets/forms/nursing_form.dart';
 import 'package:app/features/events/widgets/forms/placeholder_form.dart';
-import 'package:app/features/events/widgets/forms/solids_form.dart';
-import 'package:app/features/events/widgets/forms/temperature_form.dart';
-import 'package:app/features/events/widgets/forms/wake_up_form.dart';
 
 class EventEditSheet extends ConsumerStatefulWidget {
   final String babyId;
@@ -229,7 +222,9 @@ class _EventEditSheetState extends ConsumerState<EventEditSheet> {
         initialMetadata: metadata,
         onSave: _processUpdate,
       );
-    } else if (eventType == EventType.nap ||
+    }
+
+    if (eventType == EventType.nap ||
         eventType == EventType.nightWaking ||
         eventType == EventType.pumping) {
       return DurationEditForm(
@@ -238,61 +233,20 @@ class _EventEditSheetState extends ConsumerState<EventEditSheet> {
         initialMetadata: metadata,
         onSave: _processUpdate,
       );
-    } else if (eventType == EventType.wokeUp) {
-      return WakeUpForm(
-        initialTime: startTime,
-        initialMetadata: metadata,
-        onSave: _processUpdate,
-      );
-    } else if (eventType == EventType.bedtime) {
-      return BedtimeForm(
-        initialTime: startTime,
-        initialMetadata: metadata,
-        onSave: _processUpdate,
-      );
-    } else if (eventType == EventType.bottle) {
-      return BottleForm(
-        initialTime: startTime,
-        initialMetadata: metadata,
-        onSave: _processUpdate,
-      );
-    } else if (eventType == EventType.solids) {
-      return SolidsForm(
-        initialTime: startTime,
-        initialMetadata: metadata,
-        onSave: _processUpdate,
-      );
-    } else if (eventType == EventType.diaper) {
-      return DiaperForm(
-        initialTime: startTime,
-        initialMetadata: metadata,
-        onSave: _processUpdate,
-      );
-    } else if (eventType == EventType.temperature) {
-      return TemperatureForm(
-        initialTime: startTime,
-        initialMetadata: metadata,
-        onSave: _processUpdate,
-      );
-    } else if (eventType == EventType.medicine || eventType == EventType.bath) {
-      return BasicNotesForm(
-        initialTime: startTime,
-        initialMetadata: metadata,
-        onSave: _processUpdate,
-      );
-    } else if (eventType == EventType.growth) {
-      return GrowthForm(
-        initialTime: startTime,
-        initialMetadata: metadata,
-        onSave: _processUpdate,
-      );
-    } else {
-      return PlaceholderForm(
-        title: eventType.uiLabel,
-        initialTime: startTime,
-        initialMetadata: metadata,
-        onSave: _processUpdate,
-      );
     }
+
+    // El resto de tipos usa el mapeo compartido con el alta.
+    return EventFormFactory.buildSimpleForm(
+          eventType: eventType,
+          initialTime: startTime,
+          initialMetadata: metadata,
+          onSave: _processUpdate,
+        ) ??
+        PlaceholderForm(
+          title: eventType.uiLabel,
+          initialTime: startTime,
+          initialMetadata: metadata,
+          onSave: _processUpdate,
+        );
   }
 }

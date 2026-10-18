@@ -158,7 +158,7 @@ class _DateSelectorState extends ConsumerState<DateSelector> {
 
         // ── Header: label + calendar icon ────────────────────────────────
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
           child: Row(
             children: [
               Expanded(
@@ -202,12 +202,12 @@ class _DateSelectorState extends ConsumerState<DateSelector> {
           ),
         ),
 
-        const SizedBox(height: 14),
+        const SizedBox(height: 8),
 
         // ── Week strip (solo en modo día único) ──────────────────────────
         if (!widget.isRangeMode)
           SizedBox(
-            height: 72,
+            height: 66,
             child: PageView.builder(
               controller: _pageController,
               itemBuilder: (context, index) {
@@ -339,7 +339,7 @@ class _DateSelectorState extends ConsumerState<DateSelector> {
           ),
         ],
 
-        const SizedBox(height: 14),
+        const SizedBox(height: 10),
         Divider(
           height: 1,
           color: isDark
