@@ -48,6 +48,15 @@ class EventRepository:
             
         return valid_active_events
     
+    def get_by_category(self, baby_id: str, category: str) -> list[dict]:
+        response = self.db.table('baby_events') \
+            .select('id, start_time, metadata') \
+            .eq('baby_id', baby_id) \
+            .eq('category', category) \
+            .order('start_time', desc=False) \
+            .execute()
+        return response.data
+
     def delete_event(self, event_id: str) -> list:
         response = self.db.table('baby_events').delete().eq('id', event_id).execute()
         return response.data

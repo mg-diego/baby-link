@@ -10,7 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from services.prediction_service import PredictionService
 from models.analytics_models import DailySummary
 from models.event_models import EventCategory, EventUpdate, EventBase
-from models.baby_models import BabyCreate
+from models.baby_models import BabyCreate, BabyUpdate
 from services.baby_service import BabyService
 from services.event_service import EventService
 from services.analytics_service import AnalyticsService
@@ -61,6 +61,11 @@ def get_user_babies(user_id: str, service: BabyService = Depends(get_baby_servic
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.patch("/babies/{baby_id}", tags=["Babies"])
+def update_baby(baby_id: str, update_data: BabyUpdate, service: BabyService = Depends(get_baby_service)):
+    """Actualiza los datos del bebé (nombre, fecha de nacimiento o foto)."""
+    return {"status": "success", "data": service.update_baby(baby_id, update_data)}
+
 
 # --- 2. RECURSO: EVENTS ---
 @app.post("/events/register", tags=["Events"])
@@ -91,6 +96,14 @@ def get_valid_event_dates(baby_id: str, service: EventService = Depends(get_even
 async def get_last_events_by_category(baby_id: str, service: EventService = Depends(get_event_service)):
     try:
         return service.get_last_events_by_category(baby_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/events/growth/{baby_id}", tags=["Events"])
+def get_growth_history(baby_id: str, service: EventService = Depends(get_event_service)):
+    """Devuelve todas las mediciones de crecimiento ordenadas de más antigua a más reciente."""
+    try:
+        return {"status": "success", "data": service.get_growth_history(baby_id)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

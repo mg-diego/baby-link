@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import 'package:app/shared/models/event_type.dart';
 import 'package:app/features/babies/providers/baby_provider.dart';
+import 'package:app/features/babies/views/baby_info_screen.dart';
 import 'package:app/features/events/providers/events_provider.dart';
 import 'package:app/features/events/widgets/visual_clock/visual_clock_view.dart';
 
@@ -164,9 +165,11 @@ class BiologicalCycleView extends ConsumerWidget {
 
     String babyName = '';
     String babyAge = '';
+    String? babyPhotoUrl;
     if (babyAsync.asData?.value != null) {
       final baby = babyAsync.asData!.value!;
       babyName = baby['name'] ?? '';
+      babyPhotoUrl = baby['photo_url'] as String?;
       if (baby['dob'] != null) {
         babyAge = _calculateAge(DateTime.parse(baby['dob']));
       }
@@ -244,9 +247,12 @@ class BiologicalCycleView extends ConsumerWidget {
                         alignment: Alignment.centerLeft,
                         child: HeaderIconButton(
                           icon: Icons.person_outline_rounded,
+                          imageUrl: babyPhotoUrl,
                           isNightMode: isNightMode,
                           dayIconColor: _dayTextPrimary().withOpacity(0.75),
-                          onTap: () {},
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const BabyInfoScreen()),
+                          ),
                         ),
                       ),
                       ClipRRect(

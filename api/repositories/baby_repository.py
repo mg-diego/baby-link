@@ -12,3 +12,9 @@ class BabyRepository:
     def get_by_user(self, user_id: str) -> List[dict]:
         response = self.db.table("babies").select("*").eq("user_id", user_id).execute()
         return response.data
+
+    def update(self, baby_id: str, update_data: dict) -> dict:
+        response = self.db.table("babies").update(update_data).eq("id", baby_id).execute()
+        if not response.data:
+            raise ValueError("Bebé no encontrado o no se pudo actualizar")
+        return response.data[0]

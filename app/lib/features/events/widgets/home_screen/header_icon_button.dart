@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 
+import 'package:app/features/babies/views/widgets/baby_avatar.dart';
+
 class HeaderIconButton extends StatelessWidget {
   final IconData icon;
   final bool isNightMode;
   final Color dayIconColor; 
   final VoidCallback onTap;
+
+  /// Si se indica, se muestra la imagen (recortada en círculo) en vez del icono.
+  final String? imageUrl;
 
   const HeaderIconButton({
     super.key,
@@ -12,10 +17,19 @@ class HeaderIconButton extends StatelessWidget {
     required this.isNightMode,
     required this.dayIconColor,
     required this.onTap,
+    this.imageUrl,
   });
 
   @override
   Widget build(BuildContext context) {
+    final iconWidget = Icon(
+      icon,
+      size: 20,
+      color: isNightMode
+          ? Colors.white.withOpacity(0.80)
+          : dayIconColor,
+    );
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -35,13 +49,9 @@ class HeaderIconButton extends StatelessWidget {
             width: 0.5,
           ),
         ),
-        child: Icon(
-          icon,
-          size: 20,
-          color: isNightMode
-              ? Colors.white.withOpacity(0.80)
-              : dayIconColor,
-        ),
+        child: imageUrl != null && imageUrl!.isNotEmpty
+            ? BabyAvatar(photoUrl: imageUrl, size: 44, fallback: iconWidget)
+            : iconWidget,
       ),
     );
   }

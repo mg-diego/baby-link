@@ -164,3 +164,9 @@ final lastEventsProvider = FutureProvider.family<Map<String, String?>, String>((
 ) async {
   return await ApiService.getLastEvents(babyId);
 });
+
+
+final growthHistoryProvider =
+    FutureProvider.family<List<Map<String, dynamic>>, String>((ref, babyId) async {
+      return await ApiService.getGrowthHistory(babyId);
+    });

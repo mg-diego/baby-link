@@ -55,6 +55,9 @@ class EventService:
 
         return []
     
+    def get_growth_history(self, baby_id: str) -> list[dict]:
+        return self.repository.get_by_category(baby_id, EventCategory.GROWTH.value)
+
     def get_last_events_by_category(self, baby_id: str) -> Dict[str, Optional[str]]:
         events_data = self.repository.get_recent_events(baby_id)
         

@@ -24,6 +24,7 @@ class EventActionService {
     ref.invalidate(lastEventsProvider(babyId));
     ref.invalidate(sleepPredictionProvider(babyId));
     ref.invalidate(wakePredictionProvider(babyId));
+    ref.invalidate(growthHistoryProvider(babyId));
   }
 
   Future<void> logEvent(String babyId, String category, Map<String, dynamic> metadata, DateTime eventTime) async {

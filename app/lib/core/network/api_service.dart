@@ -36,6 +36,22 @@ class ApiService {
     return [];
   }
 
+  static Future<Map<String, dynamic>> updateBaby(
+    String babyId,
+    Map<String, dynamic> updateData,
+  ) async {
+    final response = await http.patch(
+      Uri.parse('${AppConstants.apiUrl}/babies/$babyId'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(updateData),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body)['data'] as Map<String, dynamic>;
+    }
+    throw Exception('Error al actualizar bebé (HTTP ${response.statusCode}): ${response.body}');
+  }
+
   //EVENTS
   static Future<Map<String, dynamic>> registerEvent(
     String babyId,
@@ -141,6 +157,19 @@ class ApiService {
       print('Error en GET /events/last/$babyId: $e');
       rethrow;
     }
+  }
+
+  static Future<List<Map<String, dynamic>>> getGrowthHistory(String babyId) async {
+    final response = await http.get(
+      Uri.parse('${AppConstants.apiUrl}/events/growth/$babyId'),
+      headers: {'Content-Type': 'application/json'},
+    );
+
+    if (response.statusCode == 200) {
+      final dataList = jsonDecode(response.body)['data'] as List;
+      return dataList.cast<Map<String, dynamic>>();
+    }
+    throw Exception('Error al obtener crecimiento (HTTP ${response.statusCode})');
   }
 
   static Future<Map<String, dynamic>> updateEvent(
