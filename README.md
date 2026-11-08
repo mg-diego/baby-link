@@ -8,7 +8,7 @@ App para el seguimiento del día a día de un bebé: sueño, tomas, cuidados, cr
 |---|---|
 | `app/` | App móvil en Flutter (Riverpod, go_router, Supabase) |
 | `api/` | API REST en Python (FastAPI) sobre Supabase |
-| `migrar_csv.py` | Script puntual para importar eventos desde un CSV |
+| `supabase/migrations/` | Migraciones SQL (columnas, índices, funciones y RLS) |
 
 ## Requisitos
 

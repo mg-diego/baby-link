@@ -1,3 +1,13 @@
-# Las dependencias viven en api/requirements.txt; este fichero se mantiene para
-# plataformas (Railway) que instalan desde la raíz del repositorio.
--r api/requirements.txt
+# Dependencias directas de la API (las transitivas las resuelve pip).
+# Vive en la raíz porque Railway instala desde aquí copiando solo este fichero:
+# no puede incluir otros (-r) porque aún no existen en ese paso del build.
+fastapi==0.136.1
+uvicorn==0.46.0
+supabase==2.29.0
+python-dotenv==1.2.2
+pydantic==2.13.3
+pandas==3.0.2
+PyJWT==2.12.1
+cryptography==47.0.0   # verificación de tokens ES256/RS256 (JWKS)
+cachetools==6.2.6
+tzdata==2026.2         # base de zonas horarias para zoneinfo en contenedores mínimos
