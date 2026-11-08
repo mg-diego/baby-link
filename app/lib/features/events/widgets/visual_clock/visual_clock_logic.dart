@@ -42,6 +42,8 @@ class VisualClockLogic {
   static ({DateTime start, DateTime end}) computeRange({
     required List<Map<String, dynamic>> events,
     required List<Map<String, dynamic>> yesterdayEvents,
+    // Eventos del día siguiente: la noche que empieza hoy termina mañana
+    List<Map<String, dynamic>> tomorrowEvents = const [],
     required DateTime selectedDate,
     required bool isDayMode,
     required bool? forceNightMode,
@@ -87,14 +89,21 @@ class VisualClockLogic {
         }
       }
 
-      for (var e in todayAsc) {
-        if (e['category'] == 'woke_up') {
-          woke = DateTime.parse(e['start_time']).toLocal();
+      final start = bedTime ?? DateTime(d.year, d.month, d.day - 1, 20, 30);
+
+      // La noche acaba en el primer despertar posterior a acostarse, que puede
+      // ser ya del día siguiente (si se acostó hoy, se despierta mañana).
+      final candidatesAsc = [...events, ...tomorrowEvents]
+        ..sort((a, b) => a['start_time'].compareTo(b['start_time']));
+      for (var e in candidatesAsc) {
+        if (e['category'] != 'woke_up') continue;
+        final t = DateTime.parse(e['start_time']).toLocal();
+        if (t.isAfter(start)) {
+          woke = t;
           break;
         }
       }
 
-      final start = bedTime ?? DateTime(d.year, d.month, d.day - 1, 20, 30);
       var end = woke ?? DateTime(d.year, d.month, d.day, 8, 0);
 
       if (end.isBefore(start)) {

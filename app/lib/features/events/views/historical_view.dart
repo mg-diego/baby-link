@@ -1,10 +1,9 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:app/features/babies/providers/baby_provider.dart';
+import 'package:app/features/babies/views/widgets/baby_avatar.dart';
 import 'package:app/features/events/providers/events_provider.dart';
 import 'package:app/features/widgets/date_selector.dart';
 import 'package:app/features/events/widgets/historical_view/event_list_view.dart';
@@ -12,7 +11,6 @@ import 'package:app/features/events/widgets/visual_clock/visual_clock_view.dart'
 
 class HistoricalView extends ConsumerStatefulWidget {
   final String babyId;
-  final VoidCallback onBack;
   final Future<void> Function() onRefresh;
   final Function(Map<String, dynamic>) onDelete;
   final Function(Map<String, dynamic>, {bool stopNow}) onTap;
@@ -20,7 +18,6 @@ class HistoricalView extends ConsumerStatefulWidget {
   const HistoricalView({
     super.key,
     required this.babyId,
-    required this.onBack,
     required this.onRefresh,
     required this.onDelete,
     required this.onTap,
@@ -93,6 +90,12 @@ class _HistoricalViewState extends ConsumerState<HistoricalView>
 
     final eventsAsync = ref.watch(dailyEventsProvider(args));
     final eventsYdayAsync = ref.watch(dailyEventsProvider(argsYday));
+    // La noche del día seleccionado termina al día siguiente (salvo si es hoy)
+    final now = DateTime.now();
+    final tomorrow = DateTime(selectedDate.year, selectedDate.month, selectedDate.day + 1);
+    final tomorrowAsync = tomorrow.isAfter(now)
+        ? null
+        : ref.watch(dailyEventsProvider((babyId: widget.babyId, date: tomorrow)));
     final sleepPredAsync = ref.watch(sleepPredictionProvider(widget.babyId));
     final wakePredAsync = ref.watch(wakePredictionProvider(widget.babyId));
     final babyAsync = ref.watch(babyProvider);
@@ -114,15 +117,7 @@ class _HistoricalViewState extends ConsumerState<HistoricalView>
     // que el contenido no quede tapado por él (MainScreen usa extendBody).
     final bottomReserve = MediaQuery.paddingOf(context).bottom + 88;
 
-    return PopScope(
-      // La vista histórica no es una ruta propia (se muestra alternando un flag
-      // en HomeScreen), así que interceptamos el botón Atrás para volver al
-      // ciclo en lugar de cerrar la app.
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) widget.onBack();
-      },
-      child: Scaffold(
+    return Scaffold(
       backgroundColor: bgColor,
 
       // ── AppBar custom ──────────────────────────────────────────────────────
@@ -137,7 +132,6 @@ class _HistoricalViewState extends ConsumerState<HistoricalView>
           primary: primary,
           selectedDate: selectedDate,
           calculateAge: _calculateAge,
-          onBack: widget.onBack,
         ),
       ),
 
@@ -178,6 +172,9 @@ class _HistoricalViewState extends ConsumerState<HistoricalView>
                       yesterdayEvents: List<Map<String, dynamic>>.from(
                         yesterdayEvents,
                       ),
+                      tomorrowEvents: List<Map<String, dynamic>>.from(
+                        tomorrowAsync?.asData?.value ?? const [],
+                      ),
                       selectedDate: selectedDate,
                       sleepPrediction: sleepPredAsync.asData?.value,
                       wakePrediction: wakePredAsync.asData?.value,
@@ -203,20 +200,20 @@ class _HistoricalViewState extends ConsumerState<HistoricalView>
           ),
         ],
       ),
-      ),
     );
   }
 }
 
 // ─── AppBar ────────────────────────────────────────────────────────────────────
 
+/// Cabecera de la pestaña Histórico: título + edad del bebé en la fecha
+/// seleccionada, con su avatar a la derecha.
 class _HistoricalAppBar extends StatelessWidget {
   final AsyncValue babyAsync;
   final bool isDark;
   final Color surfColor, textPri, textSec, primary;
   final DateTime selectedDate;
   final String Function(DateTime, DateTime?) calculateAge;
-  final VoidCallback onBack;
 
   const _HistoricalAppBar({
     required this.babyAsync,
@@ -227,11 +224,20 @@ class _HistoricalAppBar extends StatelessWidget {
     required this.primary,
     required this.selectedDate,
     required this.calculateAge,
-    required this.onBack,
   });
 
   @override
   Widget build(BuildContext context) {
+    final baby = babyAsync.asData?.value as Map<String, dynamic>?;
+    final name = (baby?['name'] as String?) ?? '';
+    final dobStr = baby?['dob'] as String?;
+    final dob = dobStr != null ? DateTime.tryParse(dobStr) : null;
+    final subtitle = [
+      if (name.isNotEmpty) name,
+      if (dob != null) calculateAge(dob, selectedDate),
+    ].join(' · ');
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'B';
+
     return Container(
       decoration: BoxDecoration(
         color: surfColor,
@@ -247,103 +253,68 @@ class _HistoricalAppBar extends StatelessWidget {
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
           child: SizedBox(
             height: 64,
             child: Row(
               children: [
-                // Back
-                _NavIconButton(
-                  icon: Icons.arrow_back_ios_new_rounded,
-                  isDark: isDark,
-                  primary: primary,
-                  onTap: onBack,
-                ),
-
-                const SizedBox(width: 12),
-
-                // Baby info
                 Expanded(
-                  child: babyAsync.when(
-                    data: (baby) {
-                      if (baby == null) {
-                        return Text(
-                          'Histórico',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                            color: textPri,
-                          ),
-                        );
-                      }
-                      final dob = DateTime.parse(baby['dob']);
-                      final initial = (baby['name'] as String).isNotEmpty
-                          ? (baby['name'] as String)[0].toUpperCase()
-                          : 'B';
-                      return Row(
-                        children: [
-                          // Avatar
-                          Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: primary.withOpacity(isDark ? 0.18 : 0.12),
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: primary.withOpacity(0.25),
-                                width: 1,
-                              ),
-                            ),
-                            child: Center(
-                              child: Text(
-                                initial,
-                                style: TextStyle(
-                                  color: primary,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 16,
-                                ),
-                              ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Histórico',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: textPri,
+                          height: 1.1,
+                        ),
+                      ),
+                      if (subtitle.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: textSec,
+                              height: 1.1,
                             ),
                           ),
-                          const SizedBox(width: 10),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                baby['name'] as String,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w800,
-                                  color: textPri,
-                                  height: 1.1,
-                                ),
-                              ),
-                              Text(
-                                calculateAge(dob, selectedDate),
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: textSec,
-                                  height: 1.1,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      );
-                    },
-                    loading: () => const CupertinoActivityIndicator(),
-                    error: (_, __) => Text(
-                      'Histórico',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        color: textPri,
+                        ),
+                    ],
+                  ),
+                ),
+                if (babyAsync.isLoading)
+                  const CupertinoActivityIndicator()
+                else if (baby != null)
+                  Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: primary.withOpacity(0.25),
+                        width: 1,
+                      ),
+                    ),
+                    child: BabyAvatar(
+                      photoUrl: baby['photo_url'] as String?,
+                      size: 38,
+                      backgroundColor: primary.withOpacity(isDark ? 0.18 : 0.12),
+                      fallback: Text(
+                        initial,
+                        style: TextStyle(
+                          color: primary,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                        ),
                       ),
                     ),
                   ),
-                ),
               ],
             ),
           ),
@@ -473,38 +444,6 @@ class _ToggleTab extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-// ─── Nav icon button ──────────────────────────────────────────────────────────
-
-class _NavIconButton extends StatelessWidget {
-  final IconData icon;
-  final bool isDark;
-  final Color primary;
-  final VoidCallback onTap;
-
-  const _NavIconButton({
-    required this.icon,
-    required this.isDark,
-    required this.primary,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: isDark ? primary.withOpacity(0.12) : primary.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Icon(icon, size: 17, color: primary),
       ),
     );
   }

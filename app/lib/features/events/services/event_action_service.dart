@@ -19,6 +19,11 @@ class EventActionService {
     ref.invalidate(dailyEventsProvider((babyId: babyId, date: today)));
     ref.invalidate(dailyEventsProvider((babyId: babyId, date: yesterday)));
     ref.invalidate(dailyEventsProvider((babyId: babyId, date: currentDate)));
+    // El modo noche del histórico también muestra el día anterior y el siguiente
+    for (final offset in const [-1, 1]) {
+      final day = DateTime(currentDate.year, currentDate.month, currentDate.day + offset);
+      ref.invalidate(dailyEventsProvider((babyId: babyId, date: day)));
+    }
     
     ref.invalidate(dailySummaryProvider((babyId: babyId, date: currentDate)));
     ref.invalidate(lastEventsProvider(babyId));

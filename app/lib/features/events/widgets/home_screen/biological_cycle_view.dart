@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -11,13 +10,12 @@ import 'package:app/features/events/widgets/visual_clock/visual_clock_view.dart'
 
 import 'day_sky_background.dart';
 import 'night_sky_background.dart';
-import 'header_icon_button.dart';
+import 'home_header.dart';
 import 'biological_action_bar.dart';
 import 'ongoing_event_banner.dart';
 
 class BiologicalCycleView extends ConsumerWidget {
   final String babyId;
-  final VoidCallback onOpenHistorical;
   final Function(EventType) onTriggerAction;
   final Function(Map<String, dynamic>) onTapEvent;
   final Function(Map<String, dynamic>) onStopEvent;
@@ -26,7 +24,6 @@ class BiologicalCycleView extends ConsumerWidget {
   const BiologicalCycleView({
     super.key,
     required this.babyId,
-    required this.onOpenHistorical,
     required this.onTriggerAction,
     required this.onTapEvent,
     required this.onStopEvent,
@@ -240,97 +237,20 @@ class BiologicalCycleView extends ConsumerWidget {
                     horizontal: size.width * 0.05,
                     vertical: size.height * 0.02,
                   ),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: HeaderIconButton(
-                          icon: Icons.person_outline_rounded,
-                          imageUrl: babyPhotoUrl,
-                          isNightMode: isNightMode,
-                          dayIconColor: _dayTextPrimary().withOpacity(0.75),
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const BabyInfoScreen()),
-                          ),
-                        ),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: HomeHeader(
+                      name: babyName,
+                      age: babyAge,
+                      photoUrl: babyPhotoUrl,
+                      isNightMode: isNightMode,
+                      dayTextPrimary: _dayTextPrimary(),
+                      dayTextSecondary: _dayTextSecondary(),
+                      dayTextShadow: _dayTextShadow(),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const BabyInfoScreen()),
                       ),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                          child: Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: size.width * 0.04,
-                              vertical: size.height * 0.008,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isNightMode
-                                  ? Colors.black.withOpacity(0.25)
-                                  : Colors.white.withOpacity(0.35),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: isNightMode
-                                    ? Colors.white.withOpacity(0.08)
-                                    : Colors.white.withOpacity(0.55),
-                                width: 0.5,
-                              ),
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (babyName.isNotEmpty)
-                                  Text(
-                                    babyName,
-                                    style: TextStyle(
-                                      color: isNightMode ? Colors.white : _dayTextPrimary(),
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: 0.2,
-                                      shadows: [
-                                        Shadow(
-                                          color: Colors.black.withOpacity(
-                                            isNightMode ? 0.40 : _dayTextShadow(),
-                                          ),
-                                          blurRadius: 8,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                if (babyAge.isNotEmpty)
-                                  Text(
-                                    babyAge,
-                                    style: TextStyle(
-                                      color: isNightMode
-                                          ? Colors.white.withOpacity(0.65)
-                                          : _dayTextSecondary(),
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      shadows: [
-                                        Shadow(
-                                          color: Colors.black.withOpacity(
-                                            isNightMode ? 0.30 : _dayTextShadow() * 0.7,
-                                          ),
-                                          blurRadius: 6,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: HeaderIconButton(
-                          icon: Icons.calendar_today_rounded,
-                          isNightMode: isNightMode,
-                          dayIconColor: _dayTextPrimary().withOpacity(0.75),
-                          onTap: onOpenHistorical,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
                 Expanded(

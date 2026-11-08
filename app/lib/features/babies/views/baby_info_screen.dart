@@ -559,12 +559,18 @@ class _FunFacts extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final today = _today();
-    final days = _daysBetween(dob, today);
     final hours = DateTime.now().difference(dob).inHours;
     final fmt = NumberFormat.decimalPattern('es');
 
-    const roundDays = [100, 200, 365, 500, 730, 1000, 1500, 2000];
-    final nextRound = roundDays.where((d) => d > days).firstOrNull;
+    // Próximo hito: días redondos o cumpleaños (por calendario, no 365 días).
+    const roundDays = [100, 200, 500, 1000, 1500, 2000, 2500, 3000];
+    final milestones = <(DateTime, String)>[
+      for (final n in roundDays)
+        (DateTime(dob.year, dob.month, dob.day + n), '${fmt.format(n)} días'),
+      for (var y = 1; y <= 10; y++)
+        (_monthiversary(dob, y * 12), _plural(y, 'año', 'años')),
+    ]..sort((a, b) => a.$1.compareTo(b.$1));
+    final nextMilestone = milestones.where((m) => m.$1.isAfter(today)).firstOrNull;
 
     final facts = <Widget>[
       _InfoTile(
@@ -577,11 +583,14 @@ class _FunFacts extends StatelessWidget {
         title: '${fmt.format(hours)} horas de vida',
         subtitle: 'Unos ${fmt.format(hours * 60)} minutos descubriendo el mundo',
       ),
-      if (nextRound != null)
+      if (nextMilestone case (final date, final label))
         _InfoTile(
           icon: Icons.celebration_outlined,
-          title: 'Cumplirá $nextRound días el ${DateFormat("d 'de' MMMM", 'es').format(dob.add(Duration(days: nextRound)))}',
-          subtitle: 'Faltan ${nextRound - days} días',
+          title: 'Cumplirá $label el ${DateFormat("d 'de' MMMM", 'es').format(date)}',
+          subtitle: () {
+            final left = _daysBetween(today, date);
+            return left == 1 ? 'Falta 1 día' : 'Faltan $left días';
+          }(),
         ),
     ];
 

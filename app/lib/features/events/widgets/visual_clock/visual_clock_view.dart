@@ -12,6 +12,7 @@ import 'clock_painter.dart';
 class VisualClockView extends StatefulWidget {
   final List<Map<String, dynamic>> events;
   final List<Map<String, dynamic>> yesterdayEvents;
+  final List<Map<String, dynamic>> tomorrowEvents;
   final List<SleepPrediction>? sleepPrediction;
   final SleepPrediction? wakePrediction;
   final DateTime selectedDate;
@@ -26,6 +27,7 @@ class VisualClockView extends StatefulWidget {
     super.key,
     required this.events,
     required this.yesterdayEvents,
+    this.tomorrowEvents = const [],
     required this.selectedDate,
     this.sleepPrediction,
     this.wakePrediction,
@@ -112,6 +114,7 @@ class _VisualClockViewState extends State<VisualClockView> with SingleTickerProv
     final range = VisualClockLogic.computeRange(
       events: widget.events,
       yesterdayEvents: widget.yesterdayEvents,
+      tomorrowEvents: widget.tomorrowEvents,
       selectedDate: widget.selectedDate,
       isDayMode: _isDayMode,
       forceNightMode: widget.forceNightMode,
@@ -124,7 +127,7 @@ class _VisualClockViewState extends State<VisualClockView> with SingleTickerProv
     final totalMins = endTime.difference(startTime).inMinutes;
     final safeTotalMins = totalMins > 0 ? totalMins : 1;
 
-    final allEvents = [...widget.yesterdayEvents, ...widget.events]
+    final allEvents = [...widget.yesterdayEvents, ...widget.events, ...widget.tomorrowEvents]
       ..sort((a, b) => a['start_time'].compareTo(b['start_time']));
 
     const double startAngle = 2 * math.pi / 3;

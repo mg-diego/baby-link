@@ -3,6 +3,7 @@ import 'package:app/features/analytics/views/stats_screen.dart';
 import 'package:app/features/events/providers/events_provider.dart';
 import 'package:app/features/events/views/event_form_launcher.dart';
 import 'package:app/features/events/views/event_logger_sheet.dart';
+import 'package:app/features/events/views/history_screen.dart';
 import 'package:app/features/milestones/views/milestones_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -85,8 +86,9 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
   Widget _buildTab(int index, String babyId) => switch (index) {
         0 => HomeScreen(babyId: babyId),
+        1 => HistoryScreen(babyId: babyId),
         3 => MilestonesScreen(babyId: babyId),
-        _ => StatsScreen(babyId: babyId), // 1 (Aprendizaje) y 4
+        _ => StatsScreen(babyId: babyId),
       };
 
   Widget _buildBody(String babyId) {
@@ -181,11 +183,11 @@ class _CustomNavBar extends StatelessWidget {
                     ),
                   ),
 
-                  // ── Stats ─────────────────────────────────────────────────
+                  // ── Histórico ─────────────────────────────────────────────
                   Expanded(
                     child: _NavItem(
-                      svgData: learnIcon,
-                      label: 'Aprendizaje',
+                      svgData: historyIcon,
+                      label: 'Histórico',
                       isSelected: selectedIndex == 1,
                       isDark: isDark,
                       onTap: () => onTap(1),
@@ -195,7 +197,7 @@ class _CustomNavBar extends StatelessWidget {
                   // ── Add (central) ─────────────────────────────────────────
                   _CenterAddButton(onTap: () => onTap(2)),
 
-                   // ── Stats ─────────────────────────────────────────────────
+                  // ── Recuerdos ─────────────────────────────────────────────
                   Expanded(
                     child: _NavItem(
                       svgData: milestoneIcon,
@@ -386,8 +388,8 @@ class _CenterAddButtonState extends State<_CenterAddButton>
 const homeIcon =
     '''<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <path fill-rule="evenodd" clip-rule="evenodd" d="M21.4498 10.275L11.9998 3.1875L2.5498 10.275L2.9998 11.625H3.7498V20.25H20.2498V11.625H20.9998L21.4498 10.275ZM5.2498 18.75V10.125L11.9998 5.0625L18.7498 10.125V18.75H14.9999V14.3333L14.2499 13.5833H9.74988L8.99988 14.3333V18.75H5.2498ZM10.4999 18.75H13.4999V15.0833H10.4999V18.75Z" fill="#080341"></path> </g></svg>''';
 
-const learnIcon =
-    '''<svg version="1.1" id="Icons" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 32 32" xml:space="preserve" fill="#000000"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <style type="text/css"> .st0{fill:none;stroke:#000000;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;} </style> <line class="st0" x1="23" y1="24" x2="23" y2="29"></line> <path class="st0" d="M10,21V10c0-1.7-1.3-3-3-3H1v11h6C8.7,18,10,19.3,10,21L10,21"></path> <path class="st0" d="M10,21V10c0-1.7,1.3-3,3-3h6v11h-6C11.3,18,10,19.3,10,21L10,21"></path> <path class="st0" d="M12.2,18.1c0.3,0.3,0.5,0.6,0.8,0.9v8"></path> <path class="st0" d="M22,24h4c1.1,0,2-0.9,2-2v-4h3l-3-6c0-5-4-9-9-9c-3.4,0-6.4,1.9-7.9,4.7"></path> </g></svg>''';
+const historyIcon =
+    '''<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3.5 12a8.5 8.5 0 1 0 2.49-6.01" stroke="#000000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.5 3.5v3.75h3.75" stroke="#000000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7.5V12l3 2" stroke="#000000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>''';
 
 const addIcon =
     '''<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <circle opacity="0.5" cx="12" cy="12" r="10" stroke="#1C274C" stroke-width="1.5"></circle> <path d="M15 12L12 12M12 12L9 12M12 12L12 9M12 12L12 15" stroke="#1C274C" stroke-width="1.5" stroke-linecap="round"></path> </g></svg>''';
