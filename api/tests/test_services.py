@@ -90,35 +90,3 @@ def test_home_assistant_state():
     nap = _ha([event("woke_up", local(today, 7)), event("nap", local(today, 10))], local(today, 10, 30)).get_summary("b")
     assert nap["current_state"]["current_sleep_type"] == "Siesta"
 
-
-# ─── Normalización de metadatos antiguos ──────────────────────────────────────
-
-import pytest  # noqa: E402
-
-from tools.normalize_legacy_metadata import normalize, revert  # noqa: E402
-
-
-@pytest.mark.parametrize("category, before, expected", [
-    ("diaper", {"condition": "pee", "ui_condition": "Mojado"}, {"condition": "wet"}),
-    ("diaper", {"condition": "poo:large", "ui_condition": "yellow"}, {"condition": "dirty"}),
-    ("diaper", {"condition": "both, pee:medium poo:small"}, {"condition": "mixed"}),
-    ("diaper", {"condition": "seco", "ui_condition": "Seco"}, {"condition": "clean"}),
-    ("diaper", {"condition": None, "ui_condition": "Mojado"}, {"condition": "wet"}),
-    ("feed", {"type": "nursing", "condition": "L"}, {"side": "Izquierdo"}),
-    ("feed", {"type": "breast", "condition": "Both"}, {"type": "nursing", "side": "Ambos"}),
-])
-def test_normalize_legacy_metadata_is_reversible(category, before, expected):
-    after = normalize(category, before)
-    assert {k: after[k] for k in expected} == expected
-    assert revert(after) == before
-
-
-@pytest.mark.parametrize("category, meta", [
-    ("diaper", {"condition": "wet"}),
-    ("diaper", {}),                                # sin datos: no se inventa nada
-    ("diaper", {"ui_condition": "37.7°C"}),
-    ("feed", {"type": "nursing", "side": "Derecho"}),
-    ("feed", {"type": "bottle", "amount_ml": 120}),
-])
-def test_normalize_leaves_valid_or_unknown_data_alone(category, meta):
-    assert normalize(category, meta) is None

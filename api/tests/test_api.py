@@ -145,9 +145,9 @@ def test_update_can_clear_nullable_fields(client, events):
     assert events.get_by_id(nap["id"])["end_time"] is None
 
 
-def test_update_keeps_legacy_metadata_editable(client, events):
-    # Pañal importado del CSV con un formato antiguo: cambiar solo la hora debe funcionar
-    diaper = _add_event(events, category="diaper", metadata={"condition": "Both, pee:medium"})
+def test_update_keeps_old_events_editable(client, events):
+    # Pañal antiguo sin condición (no cumple el esquema actual): cambiar solo la hora debe funcionar
+    diaper = _add_event(events, category="diaper", metadata={})
     response = client.patch(f"/events/{diaper['id']}", headers=auth(), json={"start_time": "2026-03-01T10:30:00Z"})
     assert response.status_code == 200
 

@@ -1,7 +1,7 @@
 """Esquema de `metadata` por categoría de evento.
 
 Los modelos admiten campos extra (`extra="allow"`): la app guarda datos adicionales
-(notas, predicciones `predicted_*`, campos de la migración del CSV...) que no deben
+(notas, predicciones `predicted_*`, la copia `_legacy` de datos antiguos...) que no deben
 perderse. Solo se exige lo que necesita cada categoría.
 """
 from typing import Any, Literal, Optional, Union

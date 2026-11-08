@@ -16,7 +16,7 @@ WAKING = EventCategory.NIGHT_WAKING.value
 FEED = EventCategory.FEED.value
 DIAPER = EventCategory.DIAPER.value
 
-COUNTED_DIAPERS = ("dirty", "mixed", "wet", "caca", "pipi")
+COUNTED_DIAPERS = ("dirty", "mixed", "wet")
 # Para saber si duerme desde anoche hay que mirar antes de medianoche
 LOOKBACK = timedelta(hours=18)
 # Una siesta abierta durante más de esto es un cronómetro olvidado, no una siesta
@@ -60,7 +60,7 @@ class HomeAssistantService:
                 "total_diapers": sum(
                     1 for e in today
                     if e["category"] == DIAPER
-                    and str((e.get("metadata") or {}).get("condition", "")).lower() in COUNTED_DIAPERS
+                    and (e.get("metadata") or {}).get("condition") in COUNTED_DIAPERS
                 ),
             },
             "last_events": self._last_events(baby_id, events),

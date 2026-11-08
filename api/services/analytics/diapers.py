@@ -16,19 +16,7 @@ class DiaperStats(StatsBase):
 
     @staticmethod
     def _diaper_kind(meta: dict) -> str:
-        # Valores de la app (wet/dirty/mixed/clean) y de la migración CSV (pee, poo, "Both, pee:medium"...)
-        raw = f"{meta.get('condition') or ''} {meta.get('ui_condition') or ''}".lower()
-        has_poo = any(k in raw for k in ('poo', 'dirty', 'sucio'))
-        has_pee = any(k in raw for k in ('pee', 'wet', 'mojado'))
-        if any(k in raw for k in ('both', 'mixed', 'variado')) or (has_poo and has_pee):
-            return 'mixed'
-        if has_poo:
-            return 'dirty'
-        if has_pee:
-            return 'wet'
-        if any(k in raw for k in ('clean', 'dry', 'seco')):
-            return 'dry'
-        return 'other'
+        return {'wet': 'wet', 'dirty': 'dirty', 'mixed': 'mixed', 'clean': 'dry'}.get(meta.get('condition'), 'other')
 
     def generate_diaper_stats(self, baby_id: str, start: date, end: date, only: str | None = None) -> dict:
         df = _events_df(self.repository.get_events_by_categories(baby_id, ["diaper"], start, end), self.tz)

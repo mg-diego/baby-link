@@ -20,23 +20,12 @@ class FeedingStats(StatsBase):
             return df
 
         def kind(meta: dict):
-            t = str(meta.get('type') or '').lower()
-            if t in ('nursing', 'breast'):
-                return 'nursing'
-            if t in ('bottle', 'solids'):
-                return t
-            return None
+            t = meta.get('type')
+            return t if t in ('nursing', 'bottle', 'solids') else None
 
         def side(meta: dict):
-            # App: side = Izquierdo/Derecho/Ambos · Migración CSV: condition = L/R/Both
-            raw = str(meta.get('side') or meta.get('condition') or '').strip().lower()
-            if raw in ('izquierdo', 'l', 'left'):
-                return 'Izquierdo'
-            if raw in ('derecho', 'r', 'right'):
-                return 'Derecho'
-            if raw in ('ambos', 'both'):
-                return 'Ambos'
-            return None
+            s = meta.get('side')
+            return s if s in ('Izquierdo', 'Derecho', 'Ambos') else None
 
         df['kind'] = df['metadata'].apply(kind)
         df['ml'] = df['metadata'].apply(lambda m: _safe_float(m.get('amount_ml')))

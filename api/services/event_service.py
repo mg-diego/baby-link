@@ -44,7 +44,7 @@ class EventService:
 
         validate_timing(category, start, end, metadata)
         # Los metadatos solo se validan si se modifican: así se pueden seguir editando
-        # eventos antiguos (p. ej. importados del CSV) con formatos previos.
+        # eventos antiguos que no cumplen el esquema actual (p. ej. pañales sin condición).
         if "metadata" in update_dict:
             validate_metadata(category, metadata)
 

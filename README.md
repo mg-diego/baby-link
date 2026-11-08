@@ -89,7 +89,7 @@ La documentación interactiva queda en <http://localhost:8000/docs>.
 | `prediction/` | Motor de predicciones de sueño: funciones puras, sin BD ni reloj |
 | `models/` | Modelos de entrada, de respuesta (`{status, data}`) y de `metadata` por categoría |
 | `core/` | Configuración, autenticación, errores, fechas, paginación |
-| `tools/` | Backtesting del motor y normalización de datos antiguos |
+| `tools/` | Backtesting del motor de predicciones |
 | `tests/` | `python -m pytest` |
 
 ### Autenticación
@@ -117,6 +117,4 @@ La API y la app cambian de contrato a la vez (rutas nuevas y token obligatorio):
 cd api
 python -m pytest
 python -m tools.backtest --baby-id <uuid>                     # error del motor sobre el historial real (solo lectura)
-python -m tools.normalize_legacy_metadata --baby-id <uuid>    # simula la normalización de datos del CSV
-python -m tools.normalize_legacy_metadata --baby-id <uuid> --apply   # la aplica (reversible con --revert)
 ```
