@@ -99,7 +99,7 @@ class PredictionService:
                         ongoing_nap_start = start
                 if is_today:
                     naps_taken_today += 1
-            elif cat == 'bedtime' and last_wake:
+            elif cat == 'bed_time' and last_wake:
                 ww = (start - last_wake).total_seconds() / 60
                 if 60 < ww < 480:
                     evening_ww.append(ww)
@@ -183,7 +183,7 @@ class PredictionService:
             start = self._parse_utc(ev['start_time'])
             cat = ev['category']
 
-            if cat == 'bedtime':
+            if cat == 'bed_time':
                 last_bedtime_hist = start
             elif cat == 'woke_up':
                 wake_hours.append(start.hour + start.minute / 60)
@@ -213,7 +213,7 @@ class PredictionService:
                 break
             if ev['category'] == 'woke_up':
                 break
-            if ev['category'] == 'bedtime':
+            if ev['category'] == 'bed_time':
                 active_bedtime = start
                 break
 
@@ -243,6 +243,11 @@ class PredictionService:
         blend_factor = 0.85 
 
         final_wake = pure_wake + timedelta(seconds=diff_seconds * blend_factor)
+
+        # Si el bebé se despierta sistemáticamente antes/después de lo predicho,
+        # corregir gradualmente (igual que con siestas y hora de dormir)
+        wake_bias = self._calculate_prediction_biases(events_asc)['wake_bias']
+        final_wake += timedelta(minutes=wake_bias * 0.5)
 
         if final_wake > target_wake + timedelta(minutes=45):
             final_wake = target_wake + timedelta(minutes=45)
@@ -374,6 +379,7 @@ class PredictionService:
         ww_errors_by_nap_idx = {}   # {1: [mins], 2: [mins], ...}
         duration_errors      = []
         bedtime_errors       = []
+        wake_errors          = []
 
         for ev in events:
             meta = ev.get('metadata', {})
@@ -410,6 +416,9 @@ class PredictionService:
             elif ev['category'] == 'bed_time':
                 bedtime_errors.append(error_min)
 
+            elif ev['category'] == 'woke_up':
+                wake_errors.append(error_min)
+
         def median_bias(errors, min_samples=3):
             return np.median(errors) if len(errors) >= min_samples else 0.0
 
@@ -417,4 +426,5 @@ class PredictionService:
             'ww_bias_by_idx':   {idx: median_bias(errs) for idx, errs in ww_errors_by_nap_idx.items()},
             'duration_bias':    median_bias(duration_errors),
             'bedtime_bias':     median_bias(bedtime_errors),
+            'wake_bias':        median_bias(wake_errors),
         }

@@ -75,6 +75,12 @@ class _EventCreationSheetState extends ConsumerState<EventCreationSheet> {
           finalMeta['predicted_end_time'] = bedTimePrediction.end!.toUtc().toIso8601String();
         }
       }
+    } else if (widget.eventType == EventType.wokeUp) {
+      final wakePrediction = ref.read(wakePredictionProvider(widget.babyId)).asData?.value;
+
+      if (wakePrediction != null) {
+        finalMeta['predicted_start_time'] = wakePrediction.start.toUtc().toIso8601String();
+      }
     }
 
     try {

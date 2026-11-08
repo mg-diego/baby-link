@@ -3,11 +3,13 @@ import 'package:app/shared/models/milestone.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
 import '../../providers/milestones_provider.dart';
 import '../../services/media_compressor.dart';
 import '../../services/media_metadata.dart';
+import '../../services/media_picker.dart';
 import '../../services/milestone_service.dart';
+import '../../services/video_thumbnail.dart';
+import 'milestone_media.dart';
 import 'save_progress_button.dart';
 
 class MilestoneCreationSheet extends ConsumerStatefulWidget {
@@ -30,11 +32,15 @@ class _MilestoneCreationSheetState
   final _pageCtrl = PageController();
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
-  final _picker = ImagePicker();
+  final _picker = MediaPicker();
 
   File? _mediaFile;
   String _mediaType = 'none';
+
+  /// Fotograma del vídeo elegido, para la vista previa y como portada.
+  File? _videoFrame;
   DateTime _date = DateTime.now();
+
   /// La fecha actual se ha tomado de los metadatos del fichero.
   bool _dateFromMedia = false;
   String _category = 'physical';
@@ -55,41 +61,54 @@ class _MilestoneCreationSheetState
     return dob != null ? formatBabyAge(dob, _date) : null;
   }
 
-  // Sin `imageQuality`: el picker recodificaría la foto y podría perder el
-  // EXIF. La compresión se hace al subir (ver MediaCompressor).
-  Future<void> _pickImage() =>
-      _onPicked(_picker.pickImage(source: ImageSource.gallery), 'image');
+  // La compresión se hace al subir (ver MediaCompressor).
+  Future<void> _pickImage() => _onPicked('image');
 
-  Future<void> _pickVideo() =>
-      _onPicked(_picker.pickVideo(source: ImageSource.gallery), 'video');
+  Future<void> _pickVideo() => _onPicked('video');
 
-  Future<void> _onPicked(Future<XFile?> pick, String type) async {
-    final xf = await pick;
-    if (xf == null) return;
-    final file = File(xf.path);
-    final captured = captureDateWithin(
-      await readCaptureDate(file, type),
-      widget.babyDob,
-    );
+  Future<void> _onPicked(String type) async {
+    final picked = await _picker.pick(type);
+    if (picked == null) return;
+    final file = picked.file;
+    final check = checkCaptureDate(await picked.captureDate(), widget.babyDob);
     if (!mounted) return;
+    final captured = check is ValidCaptureDate ? check.date : null;
     setState(() {
       _mediaFile = file;
       _mediaType = type;
+      _videoFrame = null;
       if (captured != null) _date = captured;
       _dateFromMedia = captured != null;
     });
+    if (check is OutOfRangeCaptureDate) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(outOfRangeMessage(check, type))));
+    }
     _nextStep();
+
+    if (type == 'video') {
+      final frame = await const VideoThumbnailer().frameOf(file.path);
+      // Puede haber elegido otro fichero mientras tanto.
+      if (mounted && _mediaFile == file) setState(() => _videoFrame = frame);
+    }
   }
 
   void _skipMedia() {
-    setState(() { _mediaFile = null; _mediaType = 'none'; });
+    setState(() {
+      _mediaFile = null;
+      _mediaType = 'none';
+      _videoFrame = null;
+    });
     _nextStep();
   }
 
   void _nextStep() {
     setState(() => _step++);
     _pageCtrl.nextPage(
-        duration: const Duration(milliseconds: 320), curve: Curves.easeOutCubic);
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   Future<void> _save() async {
@@ -99,29 +118,35 @@ class _MilestoneCreationSheetState
       _progress = null;
     });
     try {
-      await ref.read(milestonesProvider(widget.babyId).notifier).create(
-        onProgress: (p) {
-          if (mounted) setState(() => _progress = p);
-        },
-        MilestoneInput(
-          title: _titleCtrl.text.trim(),
-          description:
-              _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
-          date: _date,
-          category: _category,
-          mediaFile: _mediaFile,
-          mediaType: _mediaType,
-          emoji: catFor(_category).emoji,
-        ),
-      );
+      await ref
+          .read(milestonesProvider(widget.babyId).notifier)
+          .create(
+            onProgress: (p) {
+              if (mounted) setState(() => _progress = p);
+            },
+            MilestoneInput(
+              title: _titleCtrl.text.trim(),
+              description: _descCtrl.text.trim().isEmpty
+                  ? null
+                  : _descCtrl.text.trim(),
+              date: _date,
+              category: _category,
+              mediaFile: _mediaFile,
+              mediaType: _mediaType,
+              thumbnailFile: _mediaType == 'video' ? _videoFrame : null,
+              emoji: catFor(_category).emoji,
+            ),
+          );
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e is MediaTooLargeException
-                ? e.toString()
-                : 'No se pudo guardar el recuerdo'),
+            content: Text(
+              e is MediaTooLargeException
+                  ? e.toString()
+                  : 'No se pudo guardar el recuerdo',
+            ),
           ),
         );
       }
@@ -133,8 +158,7 @@ class _MilestoneCreationSheetState
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surfColor =
-        isDark ? const Color(0xFF1A1D2E) : Colors.white;
+    final surfColor = isDark ? const Color(0xFF1A1D2E) : Colors.white;
 
     return Container(
       decoration: BoxDecoration(
@@ -150,7 +174,8 @@ class _MilestoneCreationSheetState
           children: [
             // Handle
             Container(
-              width: 40, height: 4,
+              width: 40,
+              height: 4,
               margin: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
                 color: isDark
@@ -170,7 +195,9 @@ class _MilestoneCreationSheetState
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
-                      color: isDark ? const Color(0xFFE8EAF6) : const Color(0xFF2D3142),
+                      color: isDark
+                          ? const Color(0xFFE8EAF6)
+                          : const Color(0xFF2D3142),
                     ),
                   ),
                   const Spacer(),
@@ -197,6 +224,7 @@ class _MilestoneCreationSheetState
                     isDark: isDark,
                     mediaFile: _mediaFile,
                     mediaType: _mediaType,
+                    videoFrame: _videoFrame,
                     titleCtrl: _titleCtrl,
                     descCtrl: _descCtrl,
                     date: _date,
@@ -312,14 +340,13 @@ class _MediaOption extends StatelessWidget {
         decoration: BoxDecoration(
           color: isDark ? color.withOpacity(0.12) : color.withOpacity(0.07),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: color.withOpacity(isDark ? 0.30 : 0.20),
-          ),
+          border: Border.all(color: color.withOpacity(isDark ? 0.30 : 0.20)),
         ),
         child: Row(
           children: [
             Container(
-              width: 44, height: 44,
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
                 color: color.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(12),
@@ -330,24 +357,33 @@ class _MediaOption extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label,
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: isDark
-                            ? const Color(0xFFE8EAF6)
-                            : const Color(0xFF2D3142))),
-                Text(subtitle,
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: isDark
-                            ? Colors.white.withOpacity(0.45)
-                            : Colors.black.withOpacity(0.40))),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: isDark
+                        ? const Color(0xFFE8EAF6)
+                        : const Color(0xFF2D3142),
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark
+                        ? Colors.white.withOpacity(0.45)
+                        : Colors.black.withOpacity(0.40),
+                  ),
+                ),
               ],
             ),
             const Spacer(),
-            Icon(Icons.arrow_forward_ios_rounded,
-                size: 14, color: color.withOpacity(0.6)),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 14,
+              color: color.withOpacity(0.6),
+            ),
           ],
         ),
       ),
@@ -361,6 +397,7 @@ class _Step2Details extends StatelessWidget {
   final bool isDark;
   final File? mediaFile;
   final String mediaType;
+  final File? videoFrame;
   final TextEditingController titleCtrl, descCtrl;
   final DateTime date;
   final bool dateFromMedia;
@@ -375,6 +412,7 @@ class _Step2Details extends StatelessWidget {
     required this.isDark,
     required this.mediaFile,
     required this.mediaType,
+    required this.videoFrame,
     required this.titleCtrl,
     required this.descCtrl,
     required this.date,
@@ -389,7 +427,20 @@ class _Step2Details extends StatelessWidget {
   });
 
   String _fmtDate(DateTime d) {
-    const m = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    const m = [
+      'Ene',
+      'Feb',
+      'Mar',
+      'Abr',
+      'May',
+      'Jun',
+      'Jul',
+      'Ago',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dic',
+    ];
     return '${d.day} ${m[d.month - 1]} ${d.year}';
   }
 
@@ -409,7 +460,8 @@ class _Step2Details extends StatelessWidget {
           if (mediaFile != null)
             Center(
               child: Container(
-                width: 100, height: 120,
+                width: 100,
+                height: 120,
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(4),
@@ -426,9 +478,13 @@ class _Step2Details extends StatelessWidget {
                     Expanded(
                       child: ClipRRect(
                         borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(4)),
-                        child: Image.file(mediaFile!, fit: BoxFit.cover,
-                            width: double.infinity),
+                          top: Radius.circular(4),
+                        ),
+                        child: _MediaPreview(
+                          mediaFile: mediaFile!,
+                          mediaType: mediaType,
+                          videoFrame: videoFrame,
+                        ),
                       ),
                     ),
                     Container(
@@ -437,9 +493,10 @@ class _Step2Details extends StatelessWidget {
                       child: Text(
                         titleCtrl.text.isEmpty ? '...' : titleCtrl.text,
                         style: const TextStyle(
-                            fontSize: 10,
-                            color: Color(0xFF2D2D2D),
-                            fontWeight: FontWeight.w600),
+                          fontSize: 10,
+                          color: Color(0xFF2D2D2D),
+                          fontWeight: FontWeight.w600,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -455,9 +512,10 @@ class _Step2Details extends StatelessWidget {
           TextField(
             controller: titleCtrl,
             style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: textPri),
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: textPri,
+            ),
             decoration: InputDecoration(
               hintText: 'Nombre del hito',
               hintStyle: TextStyle(color: textSec),
@@ -470,7 +528,9 @@ class _Step2Details extends StatelessWidget {
                 borderSide: BorderSide.none,
               ),
               contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 12),
+                horizontal: 14,
+                vertical: 12,
+              ),
             ),
           ),
 
@@ -493,7 +553,9 @@ class _Step2Details extends StatelessWidget {
                 borderSide: BorderSide.none,
               ),
               contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 12),
+                horizontal: 14,
+                vertical: 12,
+              ),
             ),
           ),
 
@@ -505,38 +567,53 @@ class _Step2Details extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF4A90D9).withOpacity(isDark ? 0.12 : 0.08),
+                color: const Color(
+                  0xFF4A90D9,
+                ).withOpacity(isDark ? 0.12 : 0.08),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                    color: const Color(0xFF4A90D9).withOpacity(0.25)),
+                  color: const Color(0xFF4A90D9).withOpacity(0.25),
+                ),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.calendar_month_rounded,
-                      color: Color(0xFF4A90D9), size: 18),
+                  const Icon(
+                    Icons.calendar_month_rounded,
+                    color: Color(0xFF4A90D9),
+                    size: 18,
+                  ),
                   const SizedBox(width: 10),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(_fmtDate(date),
-                          style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF4A90D9))),
+                      Text(
+                        _fmtDate(date),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF4A90D9),
+                        ),
+                      ),
                       if (ageLabel != null)
-                        Text('Tenía $ageLabel',
-                            style: TextStyle(fontSize: 11, color: textSec)),
+                        Text(
+                          'Tenía $ageLabel',
+                          style: TextStyle(fontSize: 11, color: textSec),
+                        ),
                       if (dateFromMedia)
                         Text(
-                            mediaType == 'video'
-                                ? 'Fecha leída del vídeo'
-                                : 'Fecha leída de la foto',
-                            style: TextStyle(fontSize: 11, color: textSec)),
+                          mediaType == 'video'
+                              ? 'Fecha leída del vídeo'
+                              : 'Fecha leída de la foto',
+                          style: TextStyle(fontSize: 11, color: textSec),
+                        ),
                     ],
                   ),
                   const Spacer(),
-                  const Icon(Icons.edit_rounded,
-                      size: 14, color: Color(0xFF4A90D9)),
+                  const Icon(
+                    Icons.edit_rounded,
+                    size: 14,
+                    color: Color(0xFF4A90D9),
+                  ),
                 ],
               ),
             ),
@@ -545,11 +622,14 @@ class _Step2Details extends StatelessWidget {
           const SizedBox(height: 14),
 
           // Categorías
-          Text('Categoría',
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: textSec)),
+          Text(
+            'Categoría',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: textSec,
+            ),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -564,13 +644,15 @@ class _Step2Details extends StatelessWidget {
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 7),
+                    horizontal: 12,
+                    vertical: 7,
+                  ),
                   decoration: BoxDecoration(
                     color: selected
                         ? const Color(0xFF4A90D9)
                         : (isDark
-                            ? Colors.white.withOpacity(0.06)
-                            : Colors.black.withOpacity(0.04)),
+                              ? Colors.white.withOpacity(0.06)
+                              : Colors.black.withOpacity(0.04)),
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: selected
                         ? [
@@ -578,7 +660,7 @@ class _Step2Details extends StatelessWidget {
                               color: const Color(0xFF4A90D9).withOpacity(0.35),
                               blurRadius: 8,
                               offset: const Offset(0, 3),
-                            )
+                            ),
                           ]
                         : [],
                   ),
@@ -614,7 +696,11 @@ class _Step2Details extends StatelessWidget {
 class _StepDots extends StatelessWidget {
   final int current, total;
   final bool isDark;
-  const _StepDots({required this.current, required this.total, required this.isDark});
+  const _StepDots({
+    required this.current,
+    required this.total,
+    required this.isDark,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -630,12 +716,49 @@ class _StepDots extends StatelessWidget {
             color: active
                 ? const Color(0xFF4A90D9)
                 : (isDark
-                    ? Colors.white.withOpacity(0.20)
-                    : Colors.black.withOpacity(0.15)),
+                      ? Colors.white.withOpacity(0.20)
+                      : Colors.black.withOpacity(0.15)),
             borderRadius: BorderRadius.circular(3),
           ),
         );
       }),
+    );
+  }
+}
+
+/// Vista previa del media elegido. Los vídeos muestran su fotograma (o un
+/// icono mientras se extrae) con el botón de play.
+class _MediaPreview extends StatelessWidget {
+  final File mediaFile;
+  final String mediaType;
+  final File? videoFrame;
+
+  const _MediaPreview({
+    required this.mediaFile,
+    required this.mediaType,
+    required this.videoFrame,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (mediaType != 'video') {
+      return Image.file(mediaFile, fit: BoxFit.cover, width: double.infinity);
+    }
+    final frame = videoFrame;
+    if (frame == null) {
+      return const ColoredBox(
+        color: Color(0xFF2D3142),
+        child: Center(
+          child: Icon(Icons.videocam_rounded, color: Colors.white54),
+        ),
+      );
+    }
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image.file(frame, fit: BoxFit.cover),
+        const Center(child: PlayBadge(size: 30)),
+      ],
     );
   }
 }

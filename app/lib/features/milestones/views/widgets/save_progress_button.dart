@@ -52,9 +52,7 @@ class SaveProgressButton extends StatelessWidget {
     }
 
     final p = progress;
-    final text = p == null
-        ? 'Guardando…'
-        : [p.label, ?p.percent].join(' · ');
+    final text = p == null ? 'Guardando…' : [p.label, ?p.percent].join(' · ');
 
     return Semantics(
       liveRegion: true,

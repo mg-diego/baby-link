@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:app/features/babies/providers/baby_provider.dart';
 import 'package:app/shared/models/milestone.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/milestone_service.dart';
 
@@ -29,9 +32,45 @@ class MilestonesNotifier extends AsyncNotifier<List<Milestone>> {
 
   MilestoneService get _service => ref.read(milestoneServiceProvider);
 
+  /// Vídeos para los que ya se intentó generar miniatura en esta sesión.
+  final _thumbnailAttempted = <String>{};
+
   @override
-  Future<List<Milestone>> build() =>
-      ref.watch(milestoneServiceProvider).fetchAll(babyId);
+  Future<List<Milestone>> build() async {
+    final list = await ref.watch(milestoneServiceProvider).fetchAll(babyId);
+    final missing = [
+      for (final m in list)
+        if (m.isVideo &&
+            m.thumbnailUrl == null &&
+            _thumbnailAttempted.add(m.id))
+          m,
+    ];
+    if (missing.isNotEmpty) unawaited(_backfillThumbnails(missing));
+    return list;
+  }
+
+  /// Vídeos subidos antes de existir las miniaturas: se les genera una en
+  /// segundo plano, de uno en uno, y se actualiza la lista según llegan.
+  Future<void> _backfillThumbnails(List<Milestone> videos) async {
+    try {
+      await future; // que el build haya fijado ya la lista en el estado
+    } catch (_) {
+      return;
+    }
+    for (final m in videos) {
+      try {
+        final updated = await _service.ensureThumbnail(m);
+        if (!ref.mounted) return;
+        if (updated.thumbnailUrl != null) {
+          _setList([
+            for (final x in _current) x.id == updated.id ? updated : x,
+          ]);
+        }
+      } catch (e) {
+        debugPrint('[milestones] Miniatura de ${m.id} no generada: $e');
+      }
+    }
+  }
 
   Future<Milestone> create(
     MilestoneInput input, {

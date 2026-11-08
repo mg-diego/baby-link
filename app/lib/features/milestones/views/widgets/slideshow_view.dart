@@ -233,8 +233,9 @@ class _Slide extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         // Foto de fondo
-        if (milestone.mediaUrl != null)
-          CachedNetworkImage(imageUrl: milestone.mediaUrl!, fit: BoxFit.cover)
+        // Vídeos: su fotograma de portada; sin él, el emoji.
+        if (milestone.previewImageUrl case final url?)
+          CachedNetworkImage(imageUrl: url, fit: BoxFit.cover)
         else
           Container(
             color: const Color(0xFF1A1D2E),
@@ -283,11 +284,11 @@ class _Slide extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (milestone.mediaUrl != null)
+                  if (milestone.previewImageUrl case final url?)
                     ClipRRect(
                       borderRadius: BorderRadius.circular(2),
                       child: CachedNetworkImage(
-                        imageUrl: milestone.mediaUrl!,
+                        imageUrl: url,
                         height: 200,
                         width: double.infinity,
                         fit: BoxFit.cover,
@@ -349,15 +350,15 @@ class _Slide extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               if (babyDob != null)
-              Text(
-                milestone.ageLabel(babyDob!),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                  height: 1.0,
+                Text(
+                  milestone.ageLabel(babyDob!),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    height: 1.0,
+                  ),
                 ),
-              ),
               const SizedBox(height: 4),
               Text(
                 fmtDate(milestone.date),

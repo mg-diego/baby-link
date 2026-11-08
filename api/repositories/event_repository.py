@@ -1,6 +1,5 @@
 from typing import List
 from supabase import Client
-from datetime import datetime, timedelta
 
 class EventRepository:
     def __init__(self, db_client: Client):
@@ -85,18 +84,6 @@ class EventRepository:
             
         return all_data
     
-    def get_recent_events(self, baby_id: str, days: int = 30):        
-        cutoff = (datetime.now() - timedelta(days=days)).isoformat()
-        
-        response = self.db.table("baby_events")\
-            .select("*")\
-            .eq("baby_id", baby_id)\
-            .gte("start_time", cutoff)\
-            .order("start_time", desc=False)\
-            .execute()
-            
-        return response.data
-
     def get_baby_info(self, baby_id: str):
         response = self.db.table("babies")\
             .select("dob, name")\
@@ -107,7 +94,7 @@ class EventRepository:
     
     def get_recent_events(self, baby_id: str):
         response = self.db.table('baby_events') \
-            .select('category, start_time, metadata') \
+            .select('category, start_time, end_time, metadata') \
             .eq('baby_id', baby_id) \
             .order('start_time', desc=True) \
             .limit(1000) \

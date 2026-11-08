@@ -31,6 +31,39 @@ Uint8List _mvhdV1(int qtSecs) {
 
 const _qtOffset = 2082844800;
 
+/// JPEG mínimo con un segmento APP1/EXIF que sólo contiene DateTimeOriginal
+/// (TIFF big-endian: IFD0 -> puntero a ExifIFD -> tag 0x9003).
+Uint8List _jpegWithExifDate(String exifDate) {
+  final date = [...exifDate.codeUnits, 0]; // ASCII terminado en NUL (20 B)
+  final tiff = ByteData(44 + date.length)
+    // Cabecera TIFF
+    ..setUint16(0, 0x4D4D) // 'MM'
+    ..setUint16(2, 42)
+    ..setUint32(4, 8) // offset IFD0
+    // IFD0: 1 entrada, ExifIFDPointer (0x8769, LONG) -> 26
+    ..setUint16(8, 1)
+    ..setUint16(10, 0x8769)
+    ..setUint16(12, 4)
+    ..setUint32(14, 1)
+    ..setUint32(18, 26)
+    ..setUint32(22, 0)
+    // ExifIFD: 1 entrada, DateTimeOriginal (0x9003, ASCII) -> 44
+    ..setUint16(26, 1)
+    ..setUint16(28, 0x9003)
+    ..setUint16(30, 2)
+    ..setUint32(32, date.length)
+    ..setUint32(36, 44)
+    ..setUint32(40, 0);
+  final tiffBytes = tiff.buffer.asUint8List()..setAll(44, date);
+  final app1 = [...'Exif'.codeUnits, 0, 0, ...tiffBytes];
+  final len = app1.length + 2;
+  return Uint8List.fromList([
+    0xFF, 0xD8, // SOI
+    0xFF, 0xE1, len >> 8, len & 0xFF, ...app1,
+    0xFF, 0xD9, // EOI
+  ]);
+}
+
 void main() {
   late Directory tmp;
 
@@ -73,7 +106,10 @@ void main() {
     test('lee mvhd v1 con otras cajas delante dentro de moov', () async {
       final bytes = [
         ..._box('ftyp', 'qt  0000'.codeUnits),
-        ..._box('moov', [..._box('udta', [1, 2, 3]), ..._mvhdV1(qtSecs)]),
+        ..._box('moov', [
+          ..._box('udta', [1, 2, 3]),
+          ..._mvhdV1(qtSecs),
+        ]),
         ..._box('mdat', [0, 0]),
       ];
       final date = await readMp4CreationDate(write('b.mov', bytes));
@@ -113,6 +149,173 @@ void main() {
 
     test('el mismo día del nacimiento es válido', () {
       expect(captureDateWithin(DateTime(2025, 1, 10, 3), dob), dob);
+    });
+  });
+
+  group('readCaptureDate (imagen)', () {
+    test('lee DateTimeOriginal de un JPEG real', () async {
+      final f = write('foto.jpg', _jpegWithExifDate('2025:02:14 10:30:00'));
+      expect(await readCaptureDate(f, 'image'), DateTime(2025, 2, 14, 10, 30));
+    });
+
+    test('sin EXIF cae al nombre del fichero (WhatsApp)', () async {
+      final f = write('tmp_123.jpg', List.filled(64, 0xFF));
+      expect(
+        await readCaptureDate(
+          f,
+          'image',
+          fileNames: ['IMG-20250214-WA0003.jpg'],
+        ),
+        DateTime(2025, 2, 14),
+      );
+    });
+
+    test('el EXIF tiene prioridad sobre el nombre', () async {
+      final f = write(
+        'IMG_20240101_000000.jpg',
+        _jpegWithExifDate('2025:02:14 10:30:00'),
+      );
+      expect((await readCaptureDate(f, 'image'))!.month, 2);
+    });
+  });
+
+  group('parseDateFromFileName', () {
+    test('formatos habituales', () {
+      expect(
+        parseDateFromFileName('IMG-20250214-WA0003.jpg'),
+        DateTime(2025, 2, 14),
+      );
+      expect(
+        parseDateFromFileName('PXL_20250214_103000123.jpg'),
+        DateTime(2025, 2, 14),
+      );
+      expect(
+        parseDateFromFileName('/cache/x/VID_20250214_103000.mp4'),
+        DateTime(2025, 2, 14),
+      );
+      expect(
+        parseDateFromFileName('Screenshot_2025-02-14-10-30-00.png'),
+        DateTime(2025, 2, 14),
+      );
+      expect(
+        parseDateFromFileName('foto_2025_02_14.jpg'),
+        DateTime(2025, 2, 14),
+      );
+    });
+
+    test('no inventa fechas', () {
+      expect(parseDateFromFileName('image_picker_ABC123.jpg'), isNull);
+      expect(parseDateFromFileName('20251399.jpg'), isNull); // mes 13
+      expect(parseDateFromFileName('20250231.jpg'), isNull); // 31 feb
+      expect(parseDateFromFileName('2025-0214.jpg'), isNull); // separador mixto
+      expect(parseDateFromFileName('1234567890123.jpg'), isNull);
+      expect(parseDateFromFileName(null), isNull);
+    });
+  });
+
+  group('checkCaptureDate', () {
+    final dob = DateTime(2026, 1, 31);
+
+    test('antes del nacimiento se informa, no se descarta en silencio', () {
+      final c = checkCaptureDate(DateTime(2025, 2, 14, 10), dob);
+      expect(c, isA<OutOfRangeCaptureDate>());
+      c as OutOfRangeCaptureDate;
+      expect(c.beforeBirth, isTrue);
+      expect(c.date, DateTime(2025, 2, 14));
+      expect(outOfRangeMessage(c, 'image'), contains('14 feb 2025'));
+    });
+
+    test('sin fecha', () {
+      expect(checkCaptureDate(null, dob), isA<NoCaptureDate>());
+    });
+  });
+
+  group('fecha en bruto (formatos que el paquete exif no reconoce)', () {
+    test('HEIF con marca mif1 (Android) y bloque EXIF dentro', () async {
+      final jpeg = _jpegWithExifDate('2025:02:14 10:30:00');
+      final exifPayload = jpeg.sublist(6, jpeg.length - 2); // Exif00 + TIFF
+      final heif = [
+        ..._box('ftyp', [
+          ...'mif1'.codeUnits,
+          0,
+          0,
+          0,
+          0,
+          ...'mif1heic'.codeUnits,
+        ]),
+        ..._box('meta', List.filled(200, 0)),
+        ..._box('mdat', [...exifPayload, ...List.filled(5000, 0xAB)]),
+      ];
+      final f = write('1000012345.heic', heif);
+      expect(await readCaptureDate(f, 'image'), DateTime(2025, 2, 14, 10, 30));
+    });
+
+    test('XMP (formato ISO) y se queda con la fecha más antigua', () async {
+      final xmp =
+          '<x:xmpmeta><rdf:Description '
+          'xmp:ModifyDate="2026-11-08T09:00:00+01:00" '
+          'xmp:CreateDate="2025-02-14T10:30:00+01:00"/></x:xmpmeta>';
+      final f = write('edit.png', [0x89, 0x50, 0x4E, 0x47, ...xmp.codeUnits]);
+      expect(await scanRawMetadataDate(f), DateTime(2025, 2, 14, 10, 30));
+    });
+
+    test('ignora relojes reiniciados y basura', () async {
+      final f = write('x.jpg', [
+        0xFF,
+        0xD8,
+        ...'2000:01:01 00:00:00 1970:01:01 00:00:00 2025:13:40 99:99:99'
+            .codeUnits,
+      ]);
+      expect(await scanRawMetadataDate(f), isNull);
+    });
+  });
+
+  group('fecha de la galería (Android datetaken)', () {
+    test(
+      'JPEG sin EXIF (180 KB de WhatsApp) usa la fecha de la galería',
+      () async {
+        final f = write('6136.jpg', [
+          0xFF,
+          0xD8,
+          ...List.filled(500, 0),
+          0xFF,
+          0xD9,
+        ]);
+        expect(
+          await readCaptureDate(
+            f,
+            'image',
+            galleryDate: DateTime(2025, 2, 14, 18, 3),
+            modifiedDate: DateTime(2026, 11, 8),
+          ),
+          DateTime(2025, 2, 14, 18, 3),
+        );
+      },
+    );
+
+    test('el EXIF del fichero tiene prioridad sobre la galería', () async {
+      final f = write('a.jpg', _jpegWithExifDate('2025:02:10 08:00:00'));
+      expect(
+        await readCaptureDate(f, 'image', galleryDate: DateTime(2025, 3, 1)),
+        DateTime(2025, 2, 10, 8),
+      );
+    });
+
+    test('nombre antes que fecha de modificación', () async {
+      final f = write('6137.jpg', [0xFF, 0xD8, 0xFF, 0xD9]);
+      expect(
+        await readCaptureDate(
+          f,
+          'image',
+          fileNames: ['IMG-20250214-WA0003.jpg'],
+          modifiedDate: DateTime(2026, 11, 8),
+        ),
+        DateTime(2025, 2, 14),
+      );
+      expect(
+        await readCaptureDate(f, 'image', modifiedDate: DateTime(2025, 5, 1)),
+        DateTime(2025, 5, 1),
+      );
     });
   });
 }

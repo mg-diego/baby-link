@@ -27,25 +27,27 @@ class MilestoneThumbnail extends StatelessWidget {
       size: emojiSize,
     );
 
-    if (milestone.isVideo) {
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          placeholder,
-          const Center(child: _PlayBadge()),
-        ],
-      );
-    }
+    final url = milestone.previewImageUrl;
+    final image = url == null
+        ? placeholder
+        : CachedNetworkImage(
+            imageUrl: url,
+            fit: BoxFit.cover,
+            memCacheWidth: memCacheWidth,
+            fadeInDuration: const Duration(milliseconds: 250),
+            placeholder: (_, _) => const ColoredBox(color: _placeholderColor),
+            errorWidget: (_, _, _) => placeholder,
+          );
 
-    if (!milestone.isImage) return placeholder;
+    if (!milestone.isVideo) return image;
 
-    return CachedNetworkImage(
-      imageUrl: milestone.mediaUrl!,
-      fit: BoxFit.cover,
-      memCacheWidth: memCacheWidth,
-      fadeInDuration: const Duration(milliseconds: 250),
-      placeholder: (_, _) => const ColoredBox(color: _placeholderColor),
-      errorWidget: (_, _, _) => placeholder,
+    // Vídeo: su fotograma de portada (si ya existe) con el botón de play.
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        image,
+        const Center(child: PlayBadge()),
+      ],
     );
   }
 }
@@ -69,22 +71,24 @@ class _EmojiPlaceholder extends StatelessWidget {
   }
 }
 
-class _PlayBadge extends StatelessWidget {
-  const _PlayBadge();
+/// Círculo translúcido con el icono de reproducir.
+class PlayBadge extends StatelessWidget {
+  final double size;
+  const PlayBadge({super.key, this.size = 44});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 44,
-      height: 44,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.45),
         shape: BoxShape.circle,
       ),
-      child: const Icon(
+      child: Icon(
         Icons.play_arrow_rounded,
         color: Colors.white,
-        size: 28,
+        size: size * 0.64,
       ),
     );
   }

@@ -4,9 +4,9 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
 import '../../providers/milestones_provider.dart';
 import '../../services/media_metadata.dart';
+import '../../services/media_picker.dart';
 import '../../services/milestone_service.dart';
 import 'save_progress_button.dart';
 
@@ -30,11 +30,12 @@ class _MilestoneEditSheetState extends ConsumerState<MilestoneEditSheet> {
   late DateTime _date;
   late String _category;
   File? _newMedia;
+
   /// La fecha actual se ha tomado de los metadatos de la foto nueva.
   bool _dateFromMedia = false;
   bool _loading = false;
   UploadProgress? _progress;
-  final _picker = ImagePicker();
+  final _picker = MediaPicker();
 
   @override
   void initState() {
@@ -58,25 +59,41 @@ class _MilestoneEditSheetState extends ConsumerState<MilestoneEditSheet> {
   }
 
   String _fmtDate(DateTime d) {
-    const m = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    const m = [
+      'Ene',
+      'Feb',
+      'Mar',
+      'Abr',
+      'May',
+      'Jun',
+      'Jul',
+      'Ago',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dic',
+    ];
     return '${d.day} ${m[d.month - 1]} ${d.year}';
   }
 
-  // Sin `imageQuality` para conservar el EXIF; se comprime al subir.
+  // Se comprime al subir (ver MediaCompressor).
   Future<void> _pickImage() async {
-    final xf = await _picker.pickImage(source: ImageSource.gallery);
-    if (xf == null) return;
-    final file = File(xf.path);
-    final captured = captureDateWithin(
-      await readCaptureDate(file, 'image'),
-      widget.babyDob,
-    );
+    final picked = await _picker.pick('image');
+    if (picked == null) return;
+    final file = picked.file;
+    final check = checkCaptureDate(await picked.captureDate(), widget.babyDob);
     if (!mounted) return;
+    final captured = check is ValidCaptureDate ? check.date : null;
     setState(() {
       _newMedia = file;
       if (captured != null) _date = captured;
       _dateFromMedia = captured != null;
     });
+    if (check is OutOfRangeCaptureDate) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(outOfRangeMessage(check, 'image'))),
+      );
+    }
   }
 
   Future<void> _save() async {
@@ -87,23 +104,25 @@ class _MilestoneEditSheetState extends ConsumerState<MilestoneEditSheet> {
     });
     try {
       final original = widget.milestone;
-      await ref.read(milestonesProvider(original.babyId).notifier).edit(
-        onProgress: (p) {
-          if (mounted) setState(() => _progress = p);
-        },
-        original,
-        MilestoneInput(
-          title: _titleCtrl.text.trim(),
-          description: _descCtrl.text.trim().isEmpty
-              ? null
-              : _descCtrl.text.trim(),
-          date: _date,
-          category: _category,
-          mediaFile: _newMedia,
-          mediaType: _newMedia != null ? 'image' : original.mediaType,
-          emoji: catFor(_category).emoji,
-        ),
-      );
+      await ref
+          .read(milestonesProvider(original.babyId).notifier)
+          .edit(
+            onProgress: (p) {
+              if (mounted) setState(() => _progress = p);
+            },
+            original,
+            MilestoneInput(
+              title: _titleCtrl.text.trim(),
+              description: _descCtrl.text.trim().isEmpty
+                  ? null
+                  : _descCtrl.text.trim(),
+              date: _date,
+              category: _category,
+              mediaFile: _newMedia,
+              mediaType: _newMedia != null ? 'image' : original.mediaType,
+              emoji: catFor(_category).emoji,
+            ),
+          );
       if (mounted) Navigator.pop(context);
     } catch (_) {
       if (mounted) {
@@ -125,13 +144,16 @@ class _MilestoneEditSheetState extends ConsumerState<MilestoneEditSheet> {
         ? Colors.white.withOpacity(0.45)
         : Colors.black.withOpacity(0.40);
 
+    // Foto nueva, foto actual o fotograma de portada si es un vídeo.
+    final currentUrl = widget.milestone.previewImageUrl;
     final previewImage = _newMedia != null
         ? DecorationImage(image: FileImage(_newMedia!), fit: BoxFit.cover)
-        : (widget.milestone.isImage
-            ? DecorationImage(
-                image: CachedNetworkImageProvider(widget.milestone.mediaUrl!),
-                fit: BoxFit.cover)
-            : null);
+        : currentUrl != null
+        ? DecorationImage(
+            image: CachedNetworkImageProvider(currentUrl),
+            fit: BoxFit.cover,
+          )
+        : null;
 
     return Container(
       decoration: BoxDecoration(
@@ -139,7 +161,8 @@ class _MilestoneEditSheetState extends ConsumerState<MilestoneEditSheet> {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom),
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
@@ -149,7 +172,8 @@ class _MilestoneEditSheetState extends ConsumerState<MilestoneEditSheet> {
               // Handle
               Center(
                 child: Container(
-                  width: 40, height: 4,
+                  width: 40,
+                  height: 4,
                   margin: const EdgeInsets.symmetric(vertical: 12),
                   decoration: BoxDecoration(
                     color: isDark
@@ -159,11 +183,14 @@ class _MilestoneEditSheetState extends ConsumerState<MilestoneEditSheet> {
                   ),
                 ),
               ),
-              Text('Editar recuerdo',
-                  style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: textPri)),
+              Text(
+                'Editar recuerdo',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: textPri,
+                ),
+              ),
               const SizedBox(height: 20),
 
               // Preview foto + cambiar
@@ -178,21 +205,28 @@ class _MilestoneEditSheetState extends ConsumerState<MilestoneEditSheet> {
                     borderRadius: BorderRadius.circular(14),
                     image: previewImage,
                     border: Border.all(
-                      color: const Color(0xFF4A90D9).withOpacity(0.25)),
+                      color: const Color(0xFF4A90D9).withOpacity(0.25),
+                    ),
                   ),
                   child: previewImage == null
                       ? Center(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.add_photo_alternate_rounded,
-                                  color: const Color(0xFF4A90D9), size: 28),
+                              Icon(
+                                Icons.add_photo_alternate_rounded,
+                                color: const Color(0xFF4A90D9),
+                                size: 28,
+                              ),
                               const SizedBox(height: 6),
-                              Text('Añadir foto',
-                                  style: TextStyle(
-                                      color: const Color(0xFF4A90D9),
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 13)),
+                              Text(
+                                'Añadir foto',
+                                style: TextStyle(
+                                  color: const Color(0xFF4A90D9),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
+                              ),
                             ],
                           ),
                         )
@@ -202,7 +236,9 @@ class _MilestoneEditSheetState extends ConsumerState<MilestoneEditSheet> {
                             padding: const EdgeInsets.all(10),
                             child: Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 6),
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.black.withOpacity(0.55),
                                 borderRadius: BorderRadius.circular(10),
@@ -210,14 +246,20 @@ class _MilestoneEditSheetState extends ConsumerState<MilestoneEditSheet> {
                               child: const Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.edit_rounded,
-                                      color: Colors.white, size: 13),
+                                  Icon(
+                                    Icons.edit_rounded,
+                                    color: Colors.white,
+                                    size: 13,
+                                  ),
                                   SizedBox(width: 4),
-                                  Text('Cambiar',
-                                      style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w700)),
+                                  Text(
+                                    'Cambiar',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -231,7 +273,11 @@ class _MilestoneEditSheetState extends ConsumerState<MilestoneEditSheet> {
               // Título
               TextField(
                 controller: _titleCtrl,
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: textPri),
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: textPri,
+                ),
                 decoration: InputDecoration(
                   hintText: 'Nombre del hito',
                   hintStyle: TextStyle(color: textSec),
@@ -244,7 +290,9 @@ class _MilestoneEditSheetState extends ConsumerState<MilestoneEditSheet> {
                     borderSide: BorderSide.none,
                   ),
                   contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 12),
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                 ),
               ),
               const SizedBox(height: 10),
@@ -266,7 +314,9 @@ class _MilestoneEditSheetState extends ConsumerState<MilestoneEditSheet> {
                     borderSide: BorderSide.none,
                   ),
                   contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 12),
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                 ),
               ),
               const SizedBox(height: 14),
@@ -290,35 +340,51 @@ class _MilestoneEditSheetState extends ConsumerState<MilestoneEditSheet> {
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF4A90D9).withOpacity(isDark ? 0.12 : 0.08),
+                    color: const Color(
+                      0xFF4A90D9,
+                    ).withOpacity(isDark ? 0.12 : 0.08),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                        color: const Color(0xFF4A90D9).withOpacity(0.25)),
+                      color: const Color(0xFF4A90D9).withOpacity(0.25),
+                    ),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.calendar_month_rounded,
-                          color: Color(0xFF4A90D9), size: 18),
+                      const Icon(
+                        Icons.calendar_month_rounded,
+                        color: Color(0xFF4A90D9),
+                        size: 18,
+                      ),
                       const SizedBox(width: 10),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(_fmtDate(_date),
-                              style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF4A90D9))),
+                          Text(
+                            _fmtDate(_date),
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF4A90D9),
+                            ),
+                          ),
                           if (_ageLabel() case final age?)
-                            Text('Tenía $age',
-                                style: TextStyle(fontSize: 11, color: textSec)),
+                            Text(
+                              'Tenía $age',
+                              style: TextStyle(fontSize: 11, color: textSec),
+                            ),
                           if (_dateFromMedia)
-                            Text('Fecha leída de la foto',
-                                style: TextStyle(fontSize: 11, color: textSec)),
+                            Text(
+                              'Fecha leída de la foto',
+                              style: TextStyle(fontSize: 11, color: textSec),
+                            ),
                         ],
                       ),
                       const Spacer(),
-                      const Icon(Icons.edit_rounded,
-                          size: 14, color: Color(0xFF4A90D9)),
+                      const Icon(
+                        Icons.edit_rounded,
+                        size: 14,
+                        color: Color(0xFF4A90D9),
+                      ),
                     ],
                   ),
                 ),
@@ -326,12 +392,18 @@ class _MilestoneEditSheetState extends ConsumerState<MilestoneEditSheet> {
               const SizedBox(height: 14),
 
               // Categorías
-              Text('Categoría',
-                  style: TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w700, color: textSec)),
+              Text(
+                'Categoría',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: textSec,
+                ),
+              ),
               const SizedBox(height: 8),
               Wrap(
-                spacing: 8, runSpacing: 8,
+                spacing: 8,
+                runSpacing: 8,
                 children: kMilestoneCategories.map((cat) {
                   final selected = _category == cat.key;
                   return GestureDetector(
@@ -342,29 +414,36 @@ class _MilestoneEditSheetState extends ConsumerState<MilestoneEditSheet> {
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 180),
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 7),
+                        horizontal: 12,
+                        vertical: 7,
+                      ),
                       decoration: BoxDecoration(
                         color: selected
                             ? const Color(0xFF4A90D9)
                             : (isDark
-                                ? Colors.white.withOpacity(0.06)
-                                : Colors.black.withOpacity(0.04)),
+                                  ? Colors.white.withOpacity(0.06)
+                                  : Colors.black.withOpacity(0.04)),
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: selected
                             ? [
                                 BoxShadow(
-                                  color: const Color(0xFF4A90D9).withOpacity(0.35),
+                                  color: const Color(
+                                    0xFF4A90D9,
+                                  ).withOpacity(0.35),
                                   blurRadius: 8,
                                   offset: const Offset(0, 3),
-                                )
+                                ),
                               ]
                             : [],
                       ),
-                      child: Text('${cat.emoji} ${cat.label}',
-                          style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: selected ? Colors.white : textSec)),
+                      child: Text(
+                        '${cat.emoji} ${cat.label}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: selected ? Colors.white : textSec,
+                        ),
+                      ),
                     ),
                   );
                 }).toList(),

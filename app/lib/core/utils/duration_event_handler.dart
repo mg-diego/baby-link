@@ -311,6 +311,8 @@ class DurationEventHandler {
             'predicted_end_time': currentNapPrediction.end!
                 .toUtc()
                 .toIso8601String(),
+            if (currentNapPrediction.index != null)
+              'nap_index': currentNapPrediction.index,
           };
         }
       }

@@ -58,9 +58,17 @@ class _EventEditSheetState extends ConsumerState<EventEditSheet> {
   ]) async {
     Navigator.pop(context);
     try {
+      // Los formularios solo devuelven sus propios campos: conservar la
+      // predicción guardada al crear el evento para que el backend pueda
+      // seguir midiendo el error de sus predicciones.
+      final predictionMeta = Map<String, dynamic>.fromEntries(
+        metadata.entries.where(
+          (e) => e.key.startsWith('predicted_') || e.key == 'nap_index',
+        ),
+      );
       final payload = <String, dynamic>{
         'start_time': newStart.toUtc().toIso8601String(),
-        'metadata': updatedMeta,
+        'metadata': {...predictionMeta, ...updatedMeta},
       };
       if (newEnd != null) {
         payload['end_time'] = newEnd.toUtc().toIso8601String();

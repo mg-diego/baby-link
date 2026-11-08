@@ -48,6 +48,16 @@ class Milestone {
   bool get isVideo => hasMedia && mediaType == 'video';
   bool get isImage => hasMedia && !isVideo;
 
+  /// Clave en [metadata] con la URL del fotograma de portada de un vídeo.
+  static const thumbnailKey = 'thumbnail_url';
+
+  /// Fotograma de portada (sólo vídeos que ya lo tienen generado).
+  String? get thumbnailUrl =>
+      isVideo ? metadata[thumbnailKey] as String? : null;
+
+  /// Imagen que representa al hito: la foto o el fotograma del vídeo.
+  String? get previewImageUrl => isImage ? mediaUrl : thumbnailUrl;
+
   /// Emoji a mostrar cuando no hay foto.
   String get displayEmoji => emoji ?? catFor(category).emoji;
 
