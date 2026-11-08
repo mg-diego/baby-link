@@ -30,19 +30,29 @@ class Milestone {
   });
 
   factory Milestone.fromJson(Map<String, dynamic> j) => Milestone(
-        id: j['id'] as String,
-        babyId: j['baby_id'] as String,
-        title: j['title'] as String,
-        description: j['description'] as String?,
-        date: DateTime.parse(j['date'] as String),
-        category: j['category'] as String,
-        subcategory: j['subcategory'] as String?,
-        mediaUrl: j['media_url'] as String?,
-        mediaType: j['media_type'] as String? ?? 'none',
-        emoji: j['emoji'] as String?,
-        metadata: (j['metadata'] as Map<String, dynamic>?) ?? {},
-        createdAt: DateTime.parse(j['created_at'] as String),
-      );
+    id: j['id'] as String,
+    babyId: j['baby_id'] as String,
+    title: j['title'] as String,
+    description: j['description'] as String?,
+    date: DateTime.parse(j['date'] as String),
+    category: j['category'] as String,
+    subcategory: j['subcategory'] as String?,
+    mediaUrl: j['media_url'] as String?,
+    mediaType: j['media_type'] as String? ?? 'none',
+    emoji: j['emoji'] as String?,
+    metadata: (j['metadata'] as Map<String, dynamic>?) ?? {},
+    createdAt: DateTime.parse(j['created_at'] as String),
+  );
+
+  bool get hasMedia => mediaUrl != null && mediaType != 'none';
+  bool get isVideo => hasMedia && mediaType == 'video';
+  bool get isImage => hasMedia && !isVideo;
+
+  /// Emoji a mostrar cuando no hay foto.
+  String get displayEmoji => emoji ?? catFor(category).emoji;
+
+  /// Tag compartido por las transiciones Hero de la foto del hito.
+  String get heroTag => 'milestone-media-$id';
 
   // Rotación determinista basada en el id — siempre la misma por hito
   double get rotation {
@@ -50,17 +60,34 @@ class Milestone {
     return ((hash % 13) - 6) * math.pi / 180; // −6° a +6°
   }
 
-  String ageLabel(DateTime dob) {
-    int months = (date.year - dob.year) * 12 + date.month - dob.month;
-    int days = date.day - dob.day;
-    if (days < 0) { months--; days += 30; }
-    if (months <= 0) return '$days días';
-    if (months < 12) return months == 1 ? '1 mes' : '$months meses';
-    final y = months ~/ 12;
-    final m = months % 12;
-    if (m == 0) return y == 1 ? '1 año' : '$y años';
-    return '${y == 1 ? '1 año' : '$y años'}, ${m == 1 ? '1 mes' : '$m meses'}';
+  /// Inclinación sutil para las tarjetas de la cuadrícula (−1.5° a +1.5°).
+  double get tilt {
+    final hash = id.codeUnits.fold(0, (a, b) => a + b);
+    return ((hash % 7) - 3) * 0.5 * math.pi / 180;
   }
+
+  String ageLabel(DateTime dob) => formatBabyAge(dob, date);
+}
+
+/// Edad del bebé en [at] respecto a su fecha de nacimiento [dob].
+String formatBabyAge(DateTime dob, DateTime at) {
+  // UTC para que los cambios de horario no alteren el cómputo de días.
+  final birth = DateTime.utc(dob.year, dob.month, dob.day);
+  final day = DateTime.utc(at.year, at.month, at.day);
+
+  var months = (day.year - birth.year) * 12 + day.month - birth.month;
+  if (day.day < birth.day) months--;
+
+  if (months <= 0) {
+    final days = math.max(0, day.difference(birth).inDays);
+    return days == 1 ? '1 día' : '$days días';
+  }
+  if (months < 12) return months == 1 ? '1 mes' : '$months meses';
+  final y = months ~/ 12;
+  final m = months % 12;
+  final years = y == 1 ? '1 año' : '$y años';
+  if (m == 0) return years;
+  return '$years y ${m == 1 ? '1 mes' : '$m meses'}';
 }
 
 // ─── Categorías ────────────────────────────────────────────────────────────────
@@ -96,21 +123,13 @@ const kMilestoneCategories = [
     key: 'social',
     label: 'Social',
     emoji: '😊',
-    suggestions: [
-      'Primera sonrisa',
-      'Primera carcajada',
-      'Primera palabra',
-    ],
+    suggestions: ['Primera sonrisa', 'Primera carcajada', 'Primera palabra'],
   ),
   MilestoneCat(
     key: 'feeding',
     label: 'Alimentación',
     emoji: '🍎',
-    suggestions: [
-      'Primeros sólidos',
-      'Primera fruta',
-      'Primera papilla',
-    ],
+    suggestions: ['Primeros sólidos', 'Primera fruta', 'Primera papilla'],
   ),
   MilestoneCat(
     key: 'events',
@@ -132,6 +151,7 @@ const kMilestoneCategories = [
   ),
 ];
 
-MilestoneCat catFor(String key) =>
-    kMilestoneCategories.firstWhere((c) => c.key == key,
-        orElse: () => kMilestoneCategories.last);
+MilestoneCat catFor(String key) => kMilestoneCategories.firstWhere(
+  (c) => c.key == key,
+  orElse: () => kMilestoneCategories.last,
+);

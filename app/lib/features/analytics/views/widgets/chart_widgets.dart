@@ -1,33 +1,308 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:app/shared/models/event_type.dart';
 
+const double _plotHeight = 200;
+const int _maxBottomLabels = 6;
+
+// ─── Unidades ─────────────────────────────────────────────────────────────────
+
+/// Unidad de los valores de una gráfica (campo `unit` que envía la API).
+enum ChartUnit {
+  hours,
+  minutes,
+  count,
+  ml,
+  kg,
+  cm;
+
+  static ChartUnit fromData(Map<String, dynamic> data) {
+    switch (data['unit']) {
+      case 'minutes':
+        return ChartUnit.minutes;
+      case 'count':
+        return ChartUnit.count;
+      case 'ml':
+        return ChartUnit.ml;
+      case 'kg':
+        return ChartUnit.kg;
+      case 'cm':
+        return ChartUnit.cm;
+      default:
+        return ChartUnit.hours;
+    }
+  }
+
+  bool get startsAtZero => this != ChartUnit.kg && this != ChartUnit.cm;
+}
+
+String _decimal(double v, int decimals) {
+  var s = v.toStringAsFixed(decimals);
+  if (s.contains('.')) s = s.replaceFirst(RegExp(r'\.?0+$'), '');
+  return s.replaceAll('.', ',');
+}
+
+String _hoursMinutes(double hours) {
+  final total = (hours * 60).round();
+  final h = total ~/ 60;
+  final m = total % 60;
+  if (h > 0 && m > 0) return '${h}h ${m}m';
+  if (h > 0) return '${h}h';
+  return '${m}m';
+}
+
+/// Valor legible para tooltips y leyendas.
+String formatChartValue(double v, ChartUnit unit) {
+  switch (unit) {
+    case ChartUnit.hours:
+      return _hoursMinutes(v);
+    case ChartUnit.minutes:
+      return v >= 60 ? _hoursMinutes(v / 60) : '${v.round()} min';
+    case ChartUnit.count:
+      return '${v.round()}';
+    case ChartUnit.ml:
+      return '${v.round()} ml';
+    case ChartUnit.kg:
+      return '${_decimal(v, 2)} kg';
+    case ChartUnit.cm:
+      return '${_decimal(v, 1)} cm';
+  }
+}
+
+/// Etiqueta corta para el eje Y.
+String _axisLabel(double v, ChartUnit unit) {
+  switch (unit) {
+    case ChartUnit.hours:
+      return '${_decimal(v, 1)}h';
+    case ChartUnit.minutes:
+      return v >= 120 ? '${_decimal(v / 60, 1)}h' : '${v.round()}m';
+    case ChartUnit.count:
+      return '${v.round()}';
+    case ChartUnit.ml:
+      return v >= 1000 ? '${_decimal(v / 1000, 1)}L' : '${v.round()}';
+    case ChartUnit.kg:
+      return _decimal(v, 1);
+    case ChartUnit.cm:
+      return '${v.round()}';
+  }
+}
+
+// ─── Eje Y con intervalos "redondos" ──────────────────────────────────────────
+
+class _YAxis {
+  final double min;
+  final double max;
+  final double interval;
+  const _YAxis(this.min, this.max, this.interval);
+
+  factory _YAxis.fit(Iterable<double> values, ChartUnit unit) {
+    final list = values.where((v) => v.isFinite).toList();
+    double lo = list.isEmpty ? 0 : list.reduce(math.min);
+    double hi = list.isEmpty ? 1 : list.reduce(math.max);
+
+    if (unit.startsAtZero) {
+      lo = 0;
+    } else {
+      final pad = math.max((hi - lo) * 0.15, unit == ChartUnit.kg ? 0.2 : 1);
+      lo = math.max(0, lo - pad);
+      hi = hi + pad;
+    }
+    if (hi <= lo) hi = lo + 1;
+
+    final raw = (hi - lo) / 4;
+    final magnitude = math.pow(10, (math.log(raw) / math.ln10).floor()).toDouble();
+    final norm = raw / magnitude;
+    final step = norm <= 1
+        ? 1
+        : norm <= 2
+            ? 2
+            : norm <= 2.5
+                ? 2.5
+                : norm <= 5
+                    ? 5
+                    : 10;
+    var interval = step * magnitude;
+    if (unit == ChartUnit.count) interval = math.max(1, interval.ceilToDouble());
+
+    final min = (lo / interval).floor() * interval;
+    var max = (hi / interval).ceil() * interval;
+    if (max <= min) max = min + interval;
+    return _YAxis(min, max, interval);
+  }
+}
+
+// ─── Colores ──────────────────────────────────────────────────────────────────
+
 Color _getColorForSeries(BuildContext context, String seriesName, int index) {
   final lower = seriesName.toLowerCase();
   if (lower.contains('siesta') || lower.contains('nap')) return EventType.nap.getAccentColor(context);
+  if (lower.contains('despert') || lower.contains('waking')) return EventType.nightWaking.getAccentColor(context);
   if (lower.contains('sueño') || lower.contains('sleep') || lower.contains('nocturno')) return EventType.bedtime.getAccentColor(context);
-  if (lower.contains('despertar') || lower.contains('waking')) return EventType.nightWaking.getAccentColor(context);
-  if (lower.contains('pecho') || lower.contains('nursing') || lower.contains('toma')) return EventType.nursing.getAccentColor(context);
-  if (lower.contains('biber') || lower.contains('bottle')) return EventType.bottle.getAccentColor(context);
+  if (lower.contains('pecho') || lower.contains('nursing') || lower.contains('lactancia')) return EventType.nursing.getAccentColor(context);
+  if (lower.contains('biber') || lower.contains('bottle') || lower.contains('volumen')) return EventType.bottle.getAccentColor(context);
   if (lower.contains('sólido') || lower.contains('comida') || lower.contains('solids')) return EventType.solids.getAccentColor(context);
+  if (lower.contains('mojado')) return const Color(0xFF4A90D9);
+  if (lower.contains('sucio')) return const Color(0xFFA1785C);
+  if (lower.contains('mixto')) return EventType.diaper.getAccentColor(context);
+  if (lower.contains('seco') || lower.contains('otro')) return Colors.blueGrey.shade300;
   if (lower.contains('pañal') || lower.contains('diaper')) return EventType.diaper.getAccentColor(context);
+  if (lower.contains('peso') || lower.contains('altura') || lower.contains('perímetro')) {
+    return EventType.growth.getAccentColor(context);
+  }
 
   final fallbackColors = [
     Theme.of(context).colorScheme.primary,
     Colors.orangeAccent,
     Colors.purpleAccent,
-    Colors.greenAccent,
+    Colors.teal,
   ];
   return fallbackColors[index % fallbackColors.length];
 }
 
-String _formatTooltipValue(double val) {
-  final int h = val.floor();
-  final int m = ((val - h) * 60).round();
-  if (h > 0 && m > 0) return '${h}h ${m}m';
-  if (h > 0) return '${h}h';
-  return '${m}m';
+// ─── Piezas comunes ───────────────────────────────────────────────────────────
+
+class _ChartSeries {
+  final String name;
+  final List<double?> values;
+  const _ChartSeries(this.name, this.values);
+
+  static List<_ChartSeries> parse(Map<String, dynamic> data) {
+    final raw = List<Map<String, dynamic>>.from(data['series'] ?? []);
+    return raw
+        .map((s) => _ChartSeries(
+              s['name']?.toString() ?? '',
+              List<dynamic>.from(s['data'] ?? [])
+                  .map((v) => v is num ? v.toDouble() : null)
+                  .toList(),
+            ))
+        .toList();
+  }
 }
+
+class _NoChartData extends StatelessWidget {
+  const _NoChartData();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 80,
+      child: Center(
+        child: Text(
+          'Sin datos',
+          style: TextStyle(
+            fontSize: 13,
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.35),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Legend extends StatelessWidget {
+  final List<_ChartSeries> series;
+  final bool squareMarkers;
+  const _Legend({required this.series, this.squareMarkers = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 16,
+      runSpacing: 8,
+      children: series.asMap().entries.map((entry) {
+        final color = _getColorForSeries(context, entry.value.name, entry.key);
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: color,
+                shape: squareMarkers ? BoxShape.rectangle : BoxShape.circle,
+                borderRadius: squareMarkers ? BorderRadius.circular(3) : null,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              entry.value.name,
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface),
+            ),
+          ],
+        );
+      }).toList(),
+    );
+  }
+}
+
+int _labelStep(int count) => math.max(1, (count / _maxBottomLabels).ceil());
+
+AxisTitles _bottomTitles(BuildContext context, List<String> xLabels) {
+  final step = _labelStep(xLabels.length);
+  return AxisTitles(
+    sideTitles: SideTitles(
+      showTitles: true,
+      reservedSize: 28,
+      interval: 1,
+      getTitlesWidget: (value, meta) {
+        final index = value.round();
+        if (value != index.toDouble() || index < 0 || index >= xLabels.length || index % step != 0) {
+          return const SizedBox.shrink();
+        }
+        return SideTitleWidget(
+          meta: meta,
+          space: 8,
+          fitInside: SideTitleFitInsideData.fromTitleMeta(meta, distanceFromEdge: 0),
+          child: Text(
+            xLabels[index],
+            style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
+          ),
+        );
+      },
+    ),
+  );
+}
+
+AxisTitles _leftTitles(BuildContext context, _YAxis axis, ChartUnit unit) {
+  return AxisTitles(
+    sideTitles: SideTitles(
+      showTitles: true,
+      reservedSize: 38,
+      interval: axis.interval,
+      getTitlesWidget: (value, meta) {
+        // El 0 se sobreentiende
+        if (unit.startsAtZero && value == 0) {
+          return const SizedBox.shrink();
+        }
+        return SideTitleWidget(
+          meta: meta,
+          space: 6,
+          child: Text(
+            _axisLabel(value, unit),
+            style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
+          ),
+        );
+      },
+    ),
+  );
+}
+
+FlGridData _grid(BuildContext context, _YAxis axis) => FlGridData(
+      show: true,
+      drawVerticalLine: false,
+      horizontalInterval: axis.interval,
+      getDrawingHorizontalLine: (_) => FlLine(
+        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
+        strokeWidth: 1,
+      ),
+    );
+
+Color _tooltipColor(BuildContext context) =>
+    Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.95);
+
+// ─── Línea ────────────────────────────────────────────────────────────────────
 
 class CustomLineChart extends StatelessWidget {
   final Map<String, dynamic> data;
@@ -37,42 +312,43 @@ class CustomLineChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final xLabels = List<String>.from(data['x_labels'] ?? []);
-    final series = List<Map<String, dynamic>>.from(data['series'] ?? []);
+    final unit = ChartUnit.fromData(data);
+    final series = _ChartSeries.parse(data).where((s) => s.values.any((v) => v != null)).toList();
 
-    double maxY = 0;
-    for (var s in series) {
-      final values = List<num>.from(s['data'] ?? []);
-      for (var val in values) {
-        if (val.toDouble() > maxY) maxY = val.toDouble();
-      }
-    }
-    maxY = (maxY + 2).ceilToDouble();
+    if (xLabels.isEmpty || series.isEmpty) return const _NoChartData();
 
-    int xInterval = (xLabels.length / 6).ceil();
-    if (xInterval < 1) xInterval = 1;
+    final axis = _YAxis.fit(series.expand((s) => s.values.whereType<double>()), unit);
+    final singlePoint = xLabels.length == 1;
+    final dense = xLabels.length > 15;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
 
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Expanded(
+        SizedBox(
+          height: _plotHeight,
           child: LineChart(
             LineChartData(
               lineTouchData: LineTouchData(
                 touchTooltipData: LineTouchTooltipData(
-                  getTooltipColor: (touchedSpot) => Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.9),
-                  //tooltipRoundedRadius: 12,
+                  getTooltipColor: (_) => _tooltipColor(context),
+                  fitInsideHorizontally: true,
+                  fitInsideVertically: true,
+                  maxContentWidth: 160,
                   getTooltipItems: (touchedSpots) {
-                    return touchedSpots.map((spot) {
-                      final valStr = _formatTooltipValue(spot.y);
-                      final seriesName = series[spot.barIndex]['name'];
-                      final color = _getColorForSeries(context, seriesName, spot.barIndex);
-                      
+                    return touchedSpots.asMap().entries.map((entry) {
+                      final spot = entry.value;
+                      final s = series[spot.barIndex];
+                      final color = _getColorForSeries(context, s.name, spot.barIndex);
+                      final header = entry.key == 0 ? '${xLabels[spot.x.round()]}\n' : '';
+                      final name = series.length > 1 ? '${s.name}: ' : '';
                       return LineTooltipItem(
-                        '$seriesName\n',
-                        TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 10, fontWeight: FontWeight.bold),
+                        header,
+                        TextStyle(color: onSurface, fontSize: 10, fontWeight: FontWeight.w600),
                         children: [
                           TextSpan(
-                            text: valStr,
-                            style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w900),
+                            text: '$name${formatChartValue(spot.y, unit)}',
+                            style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w900),
                           ),
                         ],
                       );
@@ -80,72 +356,45 @@ class CustomLineChart extends StatelessWidget {
                   },
                 ),
               ),
-              gridData: const FlGridData(show: true, drawVerticalLine: false),
+              gridData: _grid(context, axis),
               titlesData: FlTitlesData(
                 rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                 topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                bottomTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 30,
-                    interval: xInterval.toDouble(),
-                    getTitlesWidget: (value, meta) {
-                      final index = value.toInt();
-                      if (index >= 0 && index < xLabels.length) {
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 8.0),
-                          child: Text(
-                            xLabels[index], 
-                            style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                          ),
-                        );
-                      }
-                      return const Text('');
-                    },
-                  ),
-                ),
-                leftTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 40,
-                    getTitlesWidget: (value, meta) {
-                      if (value == 0) return const Text('');
-                      return Text(
-                        '${value.toInt()}h', 
-                        style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                      );
-                    },
-                  ),
-                ),
+                bottomTitles: _bottomTitles(context, xLabels),
+                leftTitles: _leftTitles(context, axis, unit),
               ),
               borderData: FlBorderData(show: false),
-              minX: 0,
-              maxX: (xLabels.length - 1).toDouble(),
-              minY: 0,
-              maxY: maxY,
+              minX: singlePoint ? -0.5 : 0,
+              maxX: singlePoint ? 0.5 : (xLabels.length - 1).toDouble(),
+              minY: axis.min,
+              maxY: axis.max,
               lineBarsData: series.asMap().entries.map((entry) {
                 final idx = entry.key;
-                final serie = entry.value;
-                final values = List<num>.from(serie['data'] ?? []);
-                final color = _getColorForSeries(context, serie['name'], idx);
+                final s = entry.value;
+                final color = _getColorForSeries(context, s.name, idx);
 
                 return LineChartBarData(
-                  spots: values.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value.toDouble())).toList(),
+                  spots: s.values
+                      .asMap()
+                      .entries
+                      .map((e) => e.value == null ? FlSpot.nullSpot : FlSpot(e.key.toDouble(), e.value!))
+                      .toList(),
                   isCurved: true,
+                  preventCurveOverShooting: true,
                   color: color,
-                  barWidth: 3,
+                  barWidth: dense ? 2 : 3,
                   isStrokeCapRound: true,
                   dotData: FlDotData(
                     show: true,
                     getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
-                      radius: 3,
+                      radius: dense ? 2 : 3,
                       color: color,
                       strokeWidth: 1.5,
                       strokeColor: Theme.of(context).colorScheme.surface,
                     ),
                   ),
                   belowBarData: BarAreaData(
-                    show: true,
+                    show: series.length == 1 && unit.startsAtZero,
                     color: color.withValues(alpha: 0.1),
                   ),
                 );
@@ -153,33 +402,16 @@ class CustomLineChart extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 16,
-          runSpacing: 8,
-          children: series.asMap().entries.map((entry) {
-            final color = _getColorForSeries(context, entry.value['name'], entry.key);
-            return Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  entry.value['name'], 
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface),
-                ),
-              ],
-            );
-          }).toList(),
-        )
+        if (series.length > 1) ...[
+          const SizedBox(height: 14),
+          _Legend(series: series),
+        ],
       ],
     );
   }
 }
+
+// ─── Donut ────────────────────────────────────────────────────────────────────
 
 class CustomDonutChart extends StatelessWidget {
   final Map<String, dynamic> data;
@@ -189,65 +421,90 @@ class CustomDonutChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final xLabels = List<String>.from(data['x_labels'] ?? []);
-    final series = List<Map<String, dynamic>>.from(data['series'] ?? []);
-    
-    if (series.isEmpty) return const SizedBox();
+    final series = _ChartSeries.parse(data);
+    final unit = ChartUnit.fromData(data);
+    if (series.isEmpty) return const _NoChartData();
 
-    final values = List<num>.from(series.first['data'] ?? []);
+    final values = series.first.values;
+    final slices = <({String label, double value, Color color})>[];
+    for (var i = 0; i < xLabels.length && i < values.length; i++) {
+      final v = values[i] ?? 0;
+      if (v > 0) {
+        slices.add((label: xLabels[i], value: v, color: _getColorForSeries(context, xLabels[i], i)));
+      }
+    }
+    final total = slices.fold<double>(0, (sum, s) => sum + s.value);
+    if (slices.isEmpty || total <= 0) return const _NoChartData();
+
+    final cs = Theme.of(context).colorScheme;
 
     return Row(
       children: [
-        Expanded(
-          flex: 2,
-          child: PieChart(
-            PieChartData(
-              sectionsSpace: 2,
-              centerSpaceRadius: 40,
-              pieTouchData: PieTouchData(enabled: true),
-              sections: values.asMap().entries.map((entry) {
-                final idx = entry.key;
-                final value = entry.value.toDouble();
-                final label = xLabels.length > idx ? xLabels[idx] : '';
-                final color = _getColorForSeries(context, label, idx);
-
-                return PieChartSectionData(
-                  color: color,
-                  value: value,
-                  title: '${value.toInt()}%',
-                  radius: 45,
-                  titleStyle: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+        SizedBox(
+          width: 150,
+          height: 150,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              PieChart(
+                PieChartData(
+                  sectionsSpace: 2,
+                  centerSpaceRadius: 38,
+                  pieTouchData: PieTouchData(enabled: false),
+                  sections: slices.map((s) {
+                    final pct = s.value / total * 100;
+                    return PieChartSectionData(
+                      color: s.color,
+                      value: s.value,
+                      // En porciones pequeñas el texto no cabe: el % ya aparece en la leyenda
+                      title: pct >= 8 ? '${pct.round()}%' : '',
+                      radius: 34,
+                      titleStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                    );
+                  }).toList(),
+                ),
+              ),
+              SizedBox(
+                width: 64,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    formatChartValue(total, unit),
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: cs.onSurface),
                   ),
-                );
-              }).toList(),
-            ),
+                ),
+              ),
+            ],
           ),
         ),
+        const SizedBox(width: 16),
         Expanded(
-          flex: 1,
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: xLabels.asMap().entries.map((entry) {
-              final color = _getColorForSeries(context, entry.value, entry.key);
+            children: slices.map((s) {
+              final pct = (s.value / total * 100).round();
               return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6.0),
+                padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Row(
                   children: [
                     Container(
-                      width: 12,
-                      height: 12,
-                      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(color: s.color, shape: BoxShape.circle),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        entry.value,
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurface),
+                        s.label,
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.onSurface),
                         overflow: TextOverflow.ellipsis,
                       ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '$pct%',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: s.color),
                     ),
                   ],
                 ),
@@ -260,6 +517,8 @@ class CustomDonutChart extends StatelessWidget {
   }
 }
 
+// ─── Barras (apiladas o simples) ─────────────────────────────────────────────
+
 class CustomStackedBarChart extends StatelessWidget {
   final Map<String, dynamic> data;
 
@@ -268,251 +527,113 @@ class CustomStackedBarChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final xLabels = List<String>.from(data['x_labels'] ?? []);
-    final series = List<Map<String, dynamic>>.from(data['series'] ?? []);
+    final series = _ChartSeries.parse(data);
+    final unit = ChartUnit.fromData(data);
 
-    final screenWidth = MediaQuery.of(context).size.width;
-    final dynamicBarWidth = xLabels.isNotEmpty
-        ? ((screenWidth - 100) / (xLabels.length * 1.2)).clamp(4.0, 35.0)
-        : 25.0;
+    double valueAt(_ChartSeries s, int i) => i < s.values.length ? (s.values[i] ?? 0) : 0;
 
-    List<BarChartGroupData> barGroups = [];
-    double maxY = 0;
+    final totals = List<double>.generate(
+      xLabels.length,
+      (i) => series.fold<double>(0, (sum, s) => sum + valueAt(s, i)),
+    );
+    if (xLabels.isEmpty || totals.every((t) => t <= 0)) return const _NoChartData();
 
-    for (int i = 0; i < xLabels.length; i++) {
-      double currentY = 0;
-      List<BarChartRodStackItem> stackItems = [];
-
-      for (int j = 0; j < series.length; j++) {
-        final values = List<num>.from(series[j]['data'] ?? []);
-        if (i < values.length) {
-          final val = values[i].toDouble();
-          final color = _getColorForSeries(context, series[j]['name'], j);
-          stackItems.add(BarChartRodStackItem(currentY, currentY + val, color));
-          currentY += val;
-        }
-      }
-
-      if (currentY > maxY) maxY = currentY;
-
-      barGroups.add(
-        BarChartGroupData(
-          x: i,
-          barRods: [
-            BarChartRodData(
-              toY: currentY,
-              rodStackItems: stackItems,
-              width: dynamicBarWidth,
-              borderRadius: BorderRadius.circular(dynamicBarWidth > 8 ? 6 : 2),
-            ),
-          ],
-        ),
-      );
-    }
-
-    maxY = (maxY + 2).ceilToDouble();
-    
-    int xInterval = (xLabels.length / 6).ceil();
-    if (xInterval < 1) xInterval = 1;
+    final axis = _YAxis.fit(totals, unit);
+    final onSurface = Theme.of(context).colorScheme.onSurface;
 
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Expanded(
-          child: BarChart(
-            BarChartData(
-              alignment: BarChartAlignment.spaceAround,
-              maxY: maxY,
-              barTouchData: BarTouchData(
-                touchTooltipData: BarTouchTooltipData(
-                  getTooltipColor: (group) => Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.9),
-                  getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                    final dateLabel = xLabels[group.x];
-                    List<TextSpan> children = [];
-                    
-                    for (int j = 0; j < series.length; j++) {
-                      final values = List<num>.from(series[j]['data'] ?? []);
-                      if (group.x < values.length && values[group.x] > 0) {
-                        final valStr = _formatTooltipValue(values[group.x].toDouble());
-                        final seriesName = series[j]['name'];
-                        final color = _getColorForSeries(context, seriesName, j);
-                        children.add(
-                          TextSpan(
-                            text: '$seriesName: $valStr\n',
-                            style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11),
-                          ),
-                        );
-                      }
-                    }
+        SizedBox(
+          height: _plotHeight,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final plotWidth = constraints.maxWidth - 38;
+              final barWidth = (plotWidth / xLabels.length * 0.6).clamp(3.0, 28.0);
+              final radius = Radius.circular(barWidth > 8 ? 5 : 2);
 
-                    return BarTooltipItem(
-                      '$dateLabel\n',
-                      TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.w600, fontSize: 10),
-                      children: children,
-                    );
-                  },
-                ),
-              ),
-              titlesData: FlTitlesData(
-                show: true,
-                bottomTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 30,
-                    interval: 1, 
-                    getTitlesWidget: (value, meta) {
-                      final index = value.toInt();
-                      
-                      if (index % xInterval != 0) {
-                        return const SizedBox.shrink();
-                      }
+              final barGroups = List.generate(xLabels.length, (i) {
+                double currentY = 0;
+                final stackItems = <BarChartRodStackItem>[];
+                for (var j = 0; j < series.length; j++) {
+                  final val = valueAt(series[j], i);
+                  if (val <= 0) continue;
+                  stackItems.add(BarChartRodStackItem(
+                    currentY,
+                    currentY + val,
+                    _getColorForSeries(context, series[j].name, j),
+                  ));
+                  currentY += val;
+                }
+                return BarChartGroupData(
+                  x: i,
+                  barRods: [
+                    BarChartRodData(
+                      toY: currentY,
+                      rodStackItems: stackItems,
+                      color: stackItems.isEmpty ? Colors.transparent : stackItems.first.color,
+                      width: barWidth,
+                      borderRadius: BorderRadius.vertical(top: radius),
+                    ),
+                  ],
+                );
+              });
 
-                      if (index >= 0 && index < xLabels.length) {
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 8.0),
-                          child: Text(
-                            xLabels[index], 
-                            style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                          ),
+              return BarChart(
+                BarChartData(
+                  alignment: BarChartAlignment.spaceAround,
+                  minY: 0,
+                  maxY: axis.max,
+                  barTouchData: BarTouchData(
+                    touchTooltipData: BarTouchTooltipData(
+                      getTooltipColor: (_) => _tooltipColor(context),
+                      fitInsideHorizontally: true,
+                      fitInsideVertically: true,
+                      maxContentWidth: 160,
+                      getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                        final i = group.x;
+                        final lines = <TextSpan>[];
+                        for (var j = 0; j < series.length; j++) {
+                          final val = valueAt(series[j], i);
+                          if (val <= 0 && series.length > 1) continue;
+                          final name = series.length > 1 ? '${series[j].name}: ' : '';
+                          lines.add(TextSpan(
+                            text: '\n$name${formatChartValue(val, unit)}',
+                            style: TextStyle(
+                              color: _getColorForSeries(context, series[j].name, j),
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                            ),
+                          ));
+                        }
+                        return BarTooltipItem(
+                          xLabels[i],
+                          TextStyle(color: onSurface, fontWeight: FontWeight.w600, fontSize: 10),
+                          children: lines,
                         );
-                      }
-                      return const SizedBox.shrink();
-                    },
+                      },
+                    ),
                   ),
-                ),
-                leftTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 40,
-                    getTitlesWidget: (value, meta) {
-                      if (value == 0) return const SizedBox.shrink();
-                      return Text(
-                        '${value.toInt()}h', 
-                        style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                      );
-                    },
+                  titlesData: FlTitlesData(
+                    show: true,
+                    bottomTitles: _bottomTitles(context, xLabels),
+                    leftTitles: _leftTitles(context, axis, unit),
+                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   ),
+                  gridData: _grid(context, axis),
+                  borderData: FlBorderData(show: false),
+                  barGroups: barGroups,
                 ),
-                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              ),
-              gridData: const FlGridData(show: true, drawVerticalLine: false),
-              borderData: FlBorderData(show: false),
-              barGroups: barGroups,
-            ),
+              );
+            },
           ),
         ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 16,
-          runSpacing: 8,
-          children: series.asMap().entries.map((entry) {
-            final color = _getColorForSeries(context, entry.value['name'], entry.key);
-            return Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(4)),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  entry.value['name'], 
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface),
-                ),
-              ],
-            );
-          }).toList(),
-        )
+        if (series.length > 1) ...[
+          const SizedBox(height: 14),
+          _Legend(series: series, squareMarkers: true),
+        ],
       ],
-    );
-  }
-}
-
-class CustomSummaryCards extends StatelessWidget {
-  final Map<String, dynamic> summaryData;
-
-  const CustomSummaryCards({super.key, required this.summaryData});
-
-  @override
-  Widget build(BuildContext context) {
-    final items = summaryData.entries.toList();
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 1.5,
-      ),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final label = items[index].key;
-        final rawValue = items[index].value;
-        final color = _getColorForSeries(context, label, index);
-
-        String displayValue = rawValue.toString();
-        if (rawValue is num) {
-          displayValue = _formatTooltipValue(rawValue.toDouble());
-        }
-
-        return Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: color.withValues(alpha: 0.2), width: 1.5),
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: 0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.analytics_rounded, color: color, size: 14),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-              const Spacer(),
-              Text(
-                displayValue,
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 }

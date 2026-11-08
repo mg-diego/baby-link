@@ -53,7 +53,7 @@ class StatsScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '$err',
+                        err.toString().replaceFirst('Exception: ', ''),
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 12,
@@ -65,10 +65,20 @@ class StatsScreen extends ConsumerWidget {
                 ),
               ),
               data: (data) {
-                if (data == null || data.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
+                final summaryCards =
+                    List<Map<String, dynamic>>.from(data?['summary_cards'] ?? []);
+                final charts =
+                    List<Map<String, dynamic>>.from(data?['charts'] ?? []);
+
+                Future<void> refresh() => ref.refresh(statsProvider.future);
+
+                if (summaryCards.isEmpty && charts.isEmpty) {
+                  return RefreshIndicator(
+                    color: const Color(0xFF4A90D9),
+                    onRefresh: refresh,
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(32, 120, 32, 0),
                       children: [
                         Icon(Icons.insert_chart_outlined_rounded,
                             size: 56,
@@ -76,10 +86,20 @@ class StatsScreen extends ConsumerWidget {
                         const SizedBox(height: 12),
                         Text(
                           'Sin datos para este rango',
+                          textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                             color: cs.onSurface.withOpacity(0.40),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Prueba con otro rango de fechas o registra eventos de este tipo',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: cs.onSurface.withOpacity(0.30),
                           ),
                         ),
                       ],
@@ -87,17 +107,12 @@ class StatsScreen extends ConsumerWidget {
                   );
                 }
 
-                final summaryCards =
-                    List<Map<String, dynamic>>.from(data['summary_cards'] ?? []);
-                final charts =
-                    List<Map<String, dynamic>>.from(data['charts'] ?? []);
-
                 return RefreshIndicator(
                   color: const Color(0xFF4A90D9),
                   backgroundColor: isDark
                       ? const Color(0xFF1A1D2E)
                       : Colors.white,
-                  onRefresh: () async => ref.refresh(statsProvider),
+                  onRefresh: refresh,
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
                     children: [
@@ -134,7 +149,7 @@ class StatsScreen extends ConsumerWidget {
         crossAxisCount: 2,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
-        childAspectRatio: 2.8,
+        mainAxisExtent: 76,
       ),
       itemCount: cards.length,
       itemBuilder: (context, i) =>
@@ -211,18 +226,14 @@ class StatsScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 18),
-          SizedBox(
-            height: 220,
-            width: double.infinity,
-            child: _getSpecificChart(context, type, chart['data']),
-          ),
+          _getSpecificChart(context, type, chart['data']),
         ],
       ),
     );
   }
 
   Widget _getSpecificChart(BuildContext context, String type, dynamic data) {
-    if (data == null) {
+    if (data is! Map<String, dynamic>) {
       return Center(
         child: Text(
           'Sin datos',
@@ -267,17 +278,18 @@ class _SummaryCard extends StatelessWidget {
   // Asigna un color de acento según el tipo de KPI
   Color _accentFor(String? label) {
     final l = (label ?? '').toLowerCase();
-    if (l.contains('biberón') || l.contains('leche') || l.contains('lactancia')) {
+    if (l.contains('despert') || l.contains('despiert')) {
+      return const Color(0xFFD85A30); // coral — despertares
+    }
+    if (['biber', 'leche', 'lactancia', 'toma', 'pecho', 'volumen', 'sólido', 'comida']
+        .any(l.contains)) {
       return const Color(0xFF1D9E75); // teal — alimentación
     }
-    if (l.contains('pañal') || l.contains('diaper')) {
+    if (['pañal', 'mojado', 'sucio', 'diaper'].any(l.contains)) {
       return const Color(0xFFEF9F27); // amber — pañal
     }
-    if (l.contains('siesta') || l.contains('nap') || l.contains('sueño')) {
+    if (['siesta', 'nap', 'sueño', 'acostarse'].any(l.contains)) {
       return const Color(0xFF7F77DD); // lavanda — sueño
-    }
-    if (l.contains('despertar') || l.contains('noche')) {
-      return const Color(0xFFD85A30); // coral — noche
     }
     return const Color(0xFF4A90D9); // azul — genérico
   }
@@ -290,7 +302,7 @@ class _SummaryCard extends StatelessWidget {
     final accent = _accentFor(card['label']);
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1A1D2E) : Colors.white,
         borderRadius: BorderRadius.circular(18),
@@ -350,19 +362,25 @@ class _SummaryCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
-                child: Text(
-                  card['value'] ?? '—',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    color: isDark
-                        ? const Color(0xFFE8EAF6)
-                        : const Color(0xFF2D3142),
-                    height: 1.1,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    card['value']?.toString() ?? '—',
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: isDark
+                          ? const Color(0xFFE8EAF6)
+                          : const Color(0xFF2D3142),
+                      height: 1.1,
+                    ),
                   ),
                 ),
               ),
-              if (trend != null)
+              if (trend != null) ...[
+                const SizedBox(width: 4),
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
@@ -389,6 +407,7 @@ class _SummaryCard extends StatelessWidget {
                     ),
                   ),
                 ),
+              ],
             ],
           ),
         ],

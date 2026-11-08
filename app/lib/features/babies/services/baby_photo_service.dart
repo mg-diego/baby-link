@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:app/core/network/api_service.dart';
+import 'package:app/core/network/storage_utils.dart';
 
 /// Sube la foto de perfil del bebé al storage y guarda su URL en `babies.photo_url`.
 class BabyPhotoService {
@@ -31,14 +32,6 @@ class BabyPhotoService {
     await _deleteFromStorage(currentUrl);
   }
 
-  /// Borrado "best effort": si falla, la foto vieja solo ocupa espacio.
-  Future<void> _deleteFromStorage(String? publicUrl) async {
-    if (publicUrl == null) return;
-    final marker = '/object/public/$_bucket/';
-    final idx = publicUrl.indexOf(marker);
-    if (idx == -1) return;
-    try {
-      await _db.storage.from(_bucket).remove([publicUrl.substring(idx + marker.length)]);
-    } catch (_) {}
-  }
+  Future<void> _deleteFromStorage(String? publicUrl) =>
+      removePublicStorageFile(_db, _bucket, publicUrl);
 }

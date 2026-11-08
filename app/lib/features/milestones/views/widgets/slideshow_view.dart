@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 
 class SlideshowView extends StatefulWidget {
   final List<Milestone> milestones;
-  final DateTime babyDob;
+  final DateTime? babyDob;
 
   const SlideshowView({
     super.key,
@@ -216,7 +216,7 @@ class _SlideshowViewState extends State<SlideshowView>
 
 class _Slide extends StatelessWidget {
   final Milestone milestone;
-  final DateTime babyDob;
+  final DateTime? babyDob;
   final String Function(DateTime) fmtDate;
 
   const _Slide({
@@ -348,8 +348,9 @@ class _Slide extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
+              if (babyDob != null)
               Text(
-                milestone.ageLabel(babyDob),
+                milestone.ageLabel(babyDob!),
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 28,

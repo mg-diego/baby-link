@@ -2,37 +2,44 @@ import 'dart:io';
 import 'package:app/shared/models/milestone.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../providers/milestones_provider.dart';
+import '../../services/media_compressor.dart';
+import '../../services/media_metadata.dart';
 import '../../services/milestone_service.dart';
+import 'save_progress_button.dart';
 
-class MilestoneCreationSheet extends StatefulWidget {
+class MilestoneCreationSheet extends ConsumerStatefulWidget {
   final String babyId;
-  final DateTime babyDob;
-  final void Function(Milestone) onCreated;
+  final DateTime? babyDob;
 
   const MilestoneCreationSheet({
     super.key,
     required this.babyId,
     required this.babyDob,
-    required this.onCreated,
   });
 
   @override
-  State<MilestoneCreationSheet> createState() => _MilestoneCreationSheetState();
+  ConsumerState<MilestoneCreationSheet> createState() =>
+      _MilestoneCreationSheetState();
 }
 
-class _MilestoneCreationSheetState extends State<MilestoneCreationSheet> {
+class _MilestoneCreationSheetState
+    extends ConsumerState<MilestoneCreationSheet> {
   final _pageCtrl = PageController();
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _picker = ImagePicker();
-  final _service = MilestoneService();
 
   File? _mediaFile;
   String _mediaType = 'none';
   DateTime _date = DateTime.now();
+  /// La fecha actual se ha tomado de los metadatos del fichero.
+  bool _dateFromMedia = false;
   String _category = 'physical';
   bool _loading = false;
+  UploadProgress? _progress;
   int _step = 0;
 
   @override
@@ -43,39 +50,35 @@ class _MilestoneCreationSheetState extends State<MilestoneCreationSheet> {
     super.dispose();
   }
 
-  String _ageLabel() {
-    int months = (_date.year - widget.babyDob.year) * 12 +
-        _date.month - widget.babyDob.month;
-    int days = _date.day - widget.babyDob.day;
-    if (days < 0) { months--; days += 30; }
-    if (months <= 0) return '$days días';
-    if (months < 12) return months == 1 ? '1 mes' : '$months meses';
-    final y = months ~/ 12, m = months % 12;
-    if (m == 0) return y == 1 ? '1 año' : '$y años';
-    return '${y == 1 ? '1 año' : '$y años'} y ${m == 1 ? '1 mes' : '$m meses'}';
+  String? _ageLabel() {
+    final dob = widget.babyDob;
+    return dob != null ? formatBabyAge(dob, _date) : null;
   }
 
-  Future<void> _pickImage() async {
-    final xf = await _picker.pickImage(
-        source: ImageSource.gallery, imageQuality: 85);
-    if (xf != null) {
-      setState(() {
-        _mediaFile = File(xf.path);
-        _mediaType = 'image';
-      });
-      _nextStep();
-    }
-  }
+  // Sin `imageQuality`: el picker recodificaría la foto y podría perder el
+  // EXIF. La compresión se hace al subir (ver MediaCompressor).
+  Future<void> _pickImage() =>
+      _onPicked(_picker.pickImage(source: ImageSource.gallery), 'image');
 
-  Future<void> _pickVideo() async {
-    final xf = await _picker.pickVideo(source: ImageSource.gallery);
-    if (xf != null) {
-      setState(() {
-        _mediaFile = File(xf.path);
-        _mediaType = 'video';
-      });
-      _nextStep();
-    }
+  Future<void> _pickVideo() =>
+      _onPicked(_picker.pickVideo(source: ImageSource.gallery), 'video');
+
+  Future<void> _onPicked(Future<XFile?> pick, String type) async {
+    final xf = await pick;
+    if (xf == null) return;
+    final file = File(xf.path);
+    final captured = captureDateWithin(
+      await readCaptureDate(file, type),
+      widget.babyDob,
+    );
+    if (!mounted) return;
+    setState(() {
+      _mediaFile = file;
+      _mediaType = type;
+      if (captured != null) _date = captured;
+      _dateFromMedia = captured != null;
+    });
+    _nextStep();
   }
 
   void _skipMedia() {
@@ -91,24 +94,35 @@ class _MilestoneCreationSheetState extends State<MilestoneCreationSheet> {
 
   Future<void> _save() async {
     if (_titleCtrl.text.trim().isEmpty) return;
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _progress = null;
+    });
     try {
-      final m = await _service.create(
-        babyId: widget.babyId,
-        title: _titleCtrl.text.trim(),
-        description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
-        date: _date,
-        category: _category,
-        mediaFile: _mediaFile,
-        mediaType: _mediaType,
-        emoji: catFor(_category).emoji,
+      await ref.read(milestonesProvider(widget.babyId).notifier).create(
+        onProgress: (p) {
+          if (mounted) setState(() => _progress = p);
+        },
+        MilestoneInput(
+          title: _titleCtrl.text.trim(),
+          description:
+              _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
+          date: _date,
+          category: _category,
+          mediaFile: _mediaFile,
+          mediaType: _mediaType,
+          emoji: catFor(_category).emoji,
+        ),
       );
-      widget.onCreated(m);
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(
+            content: Text(e is MediaTooLargeException
+                ? e.toString()
+                : 'No se pudo guardar el recuerdo'),
+          ),
         );
       }
     } finally {
@@ -186,17 +200,24 @@ class _MilestoneCreationSheetState extends State<MilestoneCreationSheet> {
                     titleCtrl: _titleCtrl,
                     descCtrl: _descCtrl,
                     date: _date,
+                    dateFromMedia: _dateFromMedia,
                     ageLabel: _ageLabel(),
                     category: _category,
                     loading: _loading,
+                    progress: _progress,
                     onDateTap: () async {
                       final d = await showDatePicker(
                         context: context,
                         initialDate: _date,
-                        firstDate: widget.babyDob,
+                        firstDate: widget.babyDob ?? DateTime(2000),
                         lastDate: DateTime.now(),
                       );
-                      if (d != null) setState(() => _date = d);
+                      if (d != null) {
+                        setState(() {
+                          _date = d;
+                          _dateFromMedia = false;
+                        });
+                      }
                     },
                     onCategoryChanged: (c) => setState(() => _category = c),
                     onSave: _save,
@@ -342,8 +363,11 @@ class _Step2Details extends StatelessWidget {
   final String mediaType;
   final TextEditingController titleCtrl, descCtrl;
   final DateTime date;
-  final String ageLabel, category;
+  final bool dateFromMedia;
+  final String? ageLabel;
+  final String category;
   final bool loading;
+  final UploadProgress? progress;
   final VoidCallback onDateTap, onSave;
   final ValueChanged<String> onCategoryChanged;
 
@@ -354,9 +378,11 @@ class _Step2Details extends StatelessWidget {
     required this.titleCtrl,
     required this.descCtrl,
     required this.date,
+    required this.dateFromMedia,
     required this.ageLabel,
     required this.category,
     required this.loading,
+    required this.progress,
     required this.onDateTap,
     required this.onSave,
     required this.onCategoryChanged,
@@ -497,8 +523,15 @@ class _Step2Details extends StatelessWidget {
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
                               color: Color(0xFF4A90D9))),
-                      Text('Tenía $ageLabel',
-                          style: TextStyle(fontSize: 11, color: textSec)),
+                      if (ageLabel != null)
+                        Text('Tenía $ageLabel',
+                            style: TextStyle(fontSize: 11, color: textSec)),
+                      if (dateFromMedia)
+                        Text(
+                            mediaType == 'video'
+                                ? 'Fecha leída del vídeo'
+                                : 'Fecha leída de la foto',
+                            style: TextStyle(fontSize: 11, color: textSec)),
                     ],
                   ),
                   const Spacer(),
@@ -565,27 +598,11 @@ class _Step2Details extends StatelessWidget {
           const SizedBox(height: 20),
 
           // Guardar
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton(
-              onPressed: loading ? null : onSave,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4A90D9),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
-                elevation: 0,
-              ),
-              child: loading
-                  ? const SizedBox(
-                      width: 20, height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : const Text('Guardar recuerdo',
-                      style: TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w800)),
-            ),
+          SaveProgressButton(
+            label: 'Guardar recuerdo',
+            busy: loading,
+            progress: progress,
+            onPressed: onSave,
           ),
           const SizedBox(height: 16),
         ],

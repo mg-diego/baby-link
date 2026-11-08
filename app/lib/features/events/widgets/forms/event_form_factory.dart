@@ -95,7 +95,8 @@ class EventFormFactory {
           onSave: onSave,
         );
 
-      // Resto (p. ej. hito): formulario genérico.
+      // Los hitos nuevos se crean como recuerdos (ver launchEventForm); esto
+      // solo sirve para editar eventos "milestone" antiguos.
       case EventType.milestone:
         return PlaceholderForm(
           title: eventType.uiLabel,

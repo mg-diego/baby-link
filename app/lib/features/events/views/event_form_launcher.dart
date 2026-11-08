@@ -5,6 +5,8 @@ import 'package:app/core/utils/duration_event_handler.dart';
 import 'package:app/shared/models/event_type.dart';
 import 'package:app/features/events/services/event_action_service.dart';
 import 'package:app/features/events/widgets/forms/event_creation_form.dart';
+import 'package:app/features/milestones/providers/milestones_provider.dart';
+import 'package:app/features/milestones/views/milestone_actions.dart';
 
 /// Punto de entrada único para registrar un evento.
 ///
@@ -28,6 +30,16 @@ void launchEventForm(
       babyId: babyId,
       eventType: eventType,
       onSuccess: () => ref.read(eventActionProvider).refreshLists(babyId),
+    );
+    return;
+  }
+
+  // Los hitos no son eventos: se guardan como recuerdos (foto, categoría…).
+  if (eventType == EventType.milestone) {
+    showMilestoneCreation(
+      context,
+      babyId: babyId,
+      babyDob: ref.read(babyDobProvider),
     );
     return;
   }

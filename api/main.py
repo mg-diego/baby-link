@@ -209,43 +209,24 @@ def get_wake_prediction(
 @app.get("/analytics/{baby_id}/stats", tags=["Analytics"])
 def get_stats(
     baby_id: str, 
-    start_date: str = Query(..., description="Formato YYYY-MM-DD"), 
-    end_date: str = Query(..., description="Formato YYYY-MM-DD"), 
-    category: str = Query(..., description="Categoría principal (ej: Sueño)"), 
+    start_date: date = Query(..., description="Formato YYYY-MM-DD"),
+    end_date: date = Query(..., description="Formato YYYY-MM-DD"),
+    category: str = Query(..., description="Categoría principal (ej: Sueño)"),
     subcategory: str = Query("Todo", description="Subcategoría (ej: Siestas)"),
     service: AnalyticsService = Depends(get_analytics_service)
 ):
+    if end_date < start_date:
+        raise HTTPException(status_code=400, detail="end_date no puede ser anterior a start_date")
+
     try:
-        # Aquí puedes usar el patrón de Factory que mencionamos
-        if category == "Sueño":
-            if subcategory == "Siestas":
-                return {
-                    "status": "success",
-                    "data": service.generate_nap_sleep_stats(baby_id, start_date, end_date)
-                }
-            elif subcategory == "Sueño Nocturno":
-                return {
-                    "status": "success",
-                    "data": service.generate_night_sleep_stats(baby_id, start_date, end_date)
-                }
-            else:
-                return {"status": "success", "data": {"summary_cards": [], "charts": []}}
-            
-        elif category == "Alimentación":
-            return {
-                    "status": "success",
-                    "data": service.generate_feed_analytics(baby_id, start_date, end_date)
-                }
-            
-        elif category == "Pañales":
-            return {"status": "success", "data": {"summary_cards": [], "charts": []}}
-            
-        else:
-            raise HTTPException(status_code=400, detail="Categoría no soportada")
-            
+        data = service.generate_stats(baby_id, start_date, end_date, category, subcategory)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generando estadísticas: {str(e)}")
-    
+
+    if data is None:
+        raise HTTPException(status_code=400, detail=f"Categoría no soportada: {category} / {subcategory}")
+    return {"status": "success", "data": data}
+
 
 @app.get("/homeassistant/{baby_id}/summary", tags=["Home Assisstant"])
 async def get_home_assistant_data(baby_id: str, service: HomeAssistantService = Depends(get_home_assistant_service)):

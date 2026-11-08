@@ -1,102 +1,114 @@
-import 'dart:math' as math;
 import 'package:app/shared/models/milestone.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+import 'milestone_media.dart';
 
-class PolaroidCard extends StatefulWidget {
+const _frameRadius = BorderRadius.all(Radius.circular(4));
+
+/// Recuerdo en formato polaroid para la cuadrícula de la galería.
+///
+/// El marco es siempre blanco (como una foto impresa), también en modo oscuro.
+class PolaroidCard extends StatelessWidget {
   final Milestone milestone;
-  final DateTime babyDob;
-  final bool isLeft;
-  final VoidCallback? onViewImage;
+  final DateTime? babyDob;
+  final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   const PolaroidCard({
     super.key,
     required this.milestone,
     required this.babyDob,
-    required this.isLeft,
-    this.onViewImage,
+    required this.onTap,
+    this.onLongPress,
   });
-
-  @override
-  State<PolaroidCard> createState() => _PolaroidCardState();
-}
-
-class _PolaroidCardState extends State<PolaroidCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _anim;
-  bool _flipped = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 420),
-    );
-    _anim = Tween<double>(
-      begin: 0,
-      end: math.pi,
-    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOutCubic));
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  void _toggle() {
-    _flipped ? _ctrl.reverse() : _ctrl.forward();
-    setState(() => _flipped = !_flipped);
-  }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final dateLabel = DateFormat('d MMM y', 'es').format(milestone.date);
+    final ageLabel = babyDob != null ? milestone.ageLabel(babyDob!) : null;
 
-    final double fixedAngle = widget.isLeft ? -0.04 : 0.04;
-
-    return Padding(
-      padding: EdgeInsets.only(
-        left: widget.isLeft ? 8 : 16,
-        right: widget.isLeft ? 16 : 8,
-        top: 12,
-        bottom: 12,
-      ),
+    return Semantics(
+      button: true,
+      label: [milestone.title, dateLabel, ?ageLabel].join(', '),
+      excludeSemantics: true,
       child: Transform.rotate(
-        angle: fixedAngle,
-        child: GestureDetector(
-          onTap: _toggle,
-          child: AnimatedBuilder(
-            animation: _anim,
-            builder: (_, __) {
-              final angle = _anim.value;
-              final showBack = angle > math.pi / 2;
-
-              return Transform(
-                alignment: Alignment.center,
-                transform: Matrix4.identity()
-                  ..setEntry(3, 2, 0.0015)
-                  ..rotateY(angle),
-                child: showBack
-                    ? Transform(
-                        alignment: Alignment.center,
-                        transform: Matrix4.identity()..rotateY(math.pi),
-                        child: _Back(
-                          milestone: widget.milestone,
-                          babyDob: widget.babyDob,
-                          isDark: isDark,
+        angle: milestone.tilt,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: _frameRadius,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.12),
+                blurRadius: 14,
+                spreadRadius: -2,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.white,
+            borderRadius: _frameRadius,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: onTap,
+              onLongPress: onLongPress,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(2),
+                        child: Hero(
+                          tag: milestone.heroTag,
+                          child: LayoutBuilder(
+                            builder: (_, c) => MilestoneThumbnail(
+                              milestone: milestone,
+                              memCacheWidth: (c.maxWidth * dpr).round(),
+                            ),
+                          ),
                         ),
-                      )
-                    : _Front(
-                        milestone: widget.milestone,
-                        isDark: isDark,
-                        onViewImage: widget.onViewImage,
                       ),
-              );
-            },
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(2, 6, 2, 10),
+                      child: Column(
+                        children: [
+                          Text(
+                            milestone.title,
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.caveat(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF2D2D2D),
+                              height: 1.1,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            ageLabel ?? dateLabel,
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF4A90D9),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -104,254 +116,50 @@ class _PolaroidCardState extends State<PolaroidCard>
   }
 }
 
-// ─── Front ─────────────────────────────────────────────────────────────────────
+/// Marcador de carga con la misma silueta que [PolaroidCard].
+class PolaroidSkeleton extends StatelessWidget {
+  final Animation<double> pulse;
 
-class _Front extends StatelessWidget {
-  final Milestone milestone;
-  final bool isDark;
-  final VoidCallback? onViewImage;
-
-  const _Front({
-    required this.milestone,
-    required this.isDark,
-    this.onViewImage,
-  });
+  const PolaroidSkeleton({super.key, required this.pulse});
 
   @override
   Widget build(BuildContext context) {
-    final cat = catFor(milestone.category);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final frame = isDark ? const Color(0xFF1A1D2E) : Colors.white;
+    final fill = isDark ? const Color(0xFF242746) : const Color(0xFFF0EEFF);
 
-    return Container(
-      width: 148,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(4),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.50 : 0.18),
-            blurRadius: 16,
-            spreadRadius: -2,
-            offset: const Offset(0, 6),
-          ),
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.25 : 0.08),
-            blurRadius: 4,
-            offset: const Offset(2, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          GestureDetector(
-            onTap: onViewImage,
-            child: ClipRRect(
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(4),
-                topRight: Radius.circular(4),
-              ),
-              child: SizedBox(
-                height: 138,
-                width: double.infinity,
-                child: milestone.mediaUrl != null
-                    ? CachedNetworkImage(
-                        imageUrl: milestone.mediaUrl!,
-                        fit: BoxFit.cover,
-                        memCacheWidth: 400,
-                        errorWidget: (context, url, error) => _PhotoPlaceholder(
-                          emoji: milestone.emoji ?? cat.emoji,
-                        ),
-                      )
-                    : _PhotoPlaceholder(emoji: milestone.emoji ?? cat.emoji),
-              ),
-            ),
-          ),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
-            child: Text(
-              milestone.title,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.caveat(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF2D2D2D),
-                height: 1.2,
-              ),
-            ),
-          ),
-        ],
+    Widget bar(double widthFactor, double height) => FractionallySizedBox(
+      widthFactor: widthFactor,
+      child: Container(
+        height: height,
+        decoration: BoxDecoration(
+          color: fill,
+          borderRadius: BorderRadius.circular(height / 2),
+        ),
       ),
     );
-  }
-}
 
-// ─── Photo placeholder ─────────────────────────────────────────────────────────
-
-class _PhotoPlaceholder extends StatelessWidget {
-  final String emoji;
-  const _PhotoPlaceholder({required this.emoji});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFFF0EDF8),
-      child: Center(child: Text(emoji, style: const TextStyle(fontSize: 48))),
-    );
-  }
-}
-
-// ─── Back ──────────────────────────────────────────────────────────────────────
-
-class _Back extends StatelessWidget {
-  final Milestone milestone;
-  final DateTime babyDob;
-  final bool isDark;
-
-  const _Back({
-    required this.milestone,
-    required this.babyDob,
-    required this.isDark,
-  });
-
-  String _fmtDate(DateTime d) {
-    const months = [
-      'Ene',
-      'Feb',
-      'Mar',
-      'Abr',
-      'May',
-      'Jun',
-      'Jul',
-      'Ago',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dic',
-    ];
-    return '${d.day} ${months[d.month - 1]} ${d.year}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cat = catFor(milestone.category);
-
-    return Container(
-      width: 148,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(4),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.50 : 0.18),
-            blurRadius: 16,
-            spreadRadius: -2,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Categoría
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: const Color(0xFF4A90D9).withOpacity(0.10),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              '${cat.emoji} ${cat.label}',
-              style: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF4A90D9),
+    return FadeTransition(
+      opacity: pulse,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+        decoration: BoxDecoration(color: frame, borderRadius: _frameRadius),
+        child: Column(
+          children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: fill,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 10),
-
-          // Título
-          Text(
-            milestone.title,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF2D2D2D),
-              height: 1.2,
-            ),
-          ),
-
-          if (milestone.description != null &&
-              milestone.description!.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              milestone.description!,
-              style: const TextStyle(
-                fontSize: 11,
-                color: Color(0xFF666666),
-                height: 1.4,
-              ),
-              maxLines: 4,
-              overflow: TextOverflow.ellipsis,
-            ),
+            const SizedBox(height: 12),
+            bar(0.7, 12),
+            const SizedBox(height: 8),
+            bar(0.4, 8),
           ],
-
-          const SizedBox(height: 12),
-          const Divider(height: 1, color: Color(0xFFE8E8E8)),
-          const SizedBox(height: 10),
-
-          // Fecha
-          Row(
-            children: [
-              const Icon(
-                Icons.calendar_today_rounded,
-                size: 11,
-                color: Color(0xFF999999),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                _fmtDate(milestone.date),
-                style: const TextStyle(
-                  fontSize: 10,
-                  color: Color(0xFF999999),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-
-          // Edad
-          Row(
-            children: [
-              const Text('👶', style: TextStyle(fontSize: 10)),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  milestone.ageLabel(babyDob),
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF4A90D9),
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 10),
-          const Center(
-            child: Text(
-              'Toca para volver',
-              style: TextStyle(fontSize: 9, color: Color(0xFFBBBBBB)),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

@@ -22,7 +22,14 @@ class MainScreen extends ConsumerStatefulWidget {
 }
 
 class _MainScreenState extends ConsumerState<MainScreen> {
+  /// Índices de la barra que son pestañas (el 2 es el botón "+").
+  static const _tabIndices = [0, 1, 3, 4];
+
   int currentSelectedIndex = 0;
+
+  /// Pestañas ya visitadas: se construyen la primera vez que se abren y luego
+  /// se conservan (estado, scroll y datos) al cambiar de pestaña.
+  final Set<int> _visitedTabs = {0};
 
   @override
   void initState() {
@@ -70,15 +77,32 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       return;
     }
     HapticFeedback.selectionClick();
-    setState(() => currentSelectedIndex = index);
+    setState(() {
+      currentSelectedIndex = index;
+      _visitedTabs.add(index);
+    });
   }
 
+  Widget _buildTab(int index, String babyId) => switch (index) {
+        0 => HomeScreen(babyId: babyId),
+        3 => MilestonesScreen(babyId: babyId),
+        _ => StatsScreen(babyId: babyId), // 1 (Aprendizaje) y 4
+      };
+
   Widget _buildBody(String babyId) {
-    if (currentSelectedIndex == 0) return HomeScreen(babyId: babyId);
-    if (currentSelectedIndex == 1) return StatsScreen(babyId: babyId);    
-    if (currentSelectedIndex == 3) return MilestonesScreen(babyId: babyId);
-    if (currentSelectedIndex == 4) return StatsScreen(babyId: babyId);
-    return HomeScreen(babyId: babyId);
+    return IndexedStack(
+      index: _tabIndices.indexOf(currentSelectedIndex),
+      children: [
+        for (final i in _tabIndices)
+          // Las pestañas ocultas no animan (ahorra batería y CPU).
+          TickerMode(
+            enabled: i == currentSelectedIndex,
+            child: _visitedTabs.contains(i)
+                ? _buildTab(i, babyId)
+                : const SizedBox.shrink(),
+          ),
+      ],
+    );
   }
 
   @override

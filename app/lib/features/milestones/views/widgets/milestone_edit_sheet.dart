@@ -1,37 +1,40 @@
 import 'dart:io';
 import 'package:app/shared/models/milestone.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../providers/milestones_provider.dart';
+import '../../services/media_metadata.dart';
 import '../../services/milestone_service.dart';
+import 'save_progress_button.dart';
 
-class MilestoneEditSheet extends StatefulWidget {
+class MilestoneEditSheet extends ConsumerStatefulWidget {
   final Milestone milestone;
-  final String babyId;
-  final DateTime babyDob;
-  final void Function(Milestone) onUpdated;
+  final DateTime? babyDob;
 
   const MilestoneEditSheet({
     super.key,
     required this.milestone,
-    required this.babyId,
     required this.babyDob,
-    required this.onUpdated,
   });
 
   @override
-  State<MilestoneEditSheet> createState() => _MilestoneEditSheetState();
+  ConsumerState<MilestoneEditSheet> createState() => _MilestoneEditSheetState();
 }
 
-class _MilestoneEditSheetState extends State<MilestoneEditSheet> {
+class _MilestoneEditSheetState extends ConsumerState<MilestoneEditSheet> {
   late TextEditingController _titleCtrl;
   late TextEditingController _descCtrl;
   late DateTime _date;
   late String _category;
   File? _newMedia;
+  /// La fecha actual se ha tomado de los metadatos de la foto nueva.
+  bool _dateFromMedia = false;
   bool _loading = false;
+  UploadProgress? _progress;
   final _picker = ImagePicker();
-  final _service = MilestoneService();
 
   @override
   void initState() {
@@ -49,16 +52,9 @@ class _MilestoneEditSheetState extends State<MilestoneEditSheet> {
     super.dispose();
   }
 
-  String _ageLabel() {
-    int months = (_date.year - widget.babyDob.year) * 12 +
-        _date.month - widget.babyDob.month;
-    int days = _date.day - widget.babyDob.day;
-    if (days < 0) { months--; days += 30; }
-    if (months <= 0) return '$days días';
-    if (months < 12) return months == 1 ? '1 mes' : '$months meses';
-    final y = months ~/ 12, m = months % 12;
-    if (m == 0) return y == 1 ? '1 año' : '$y años';
-    return '${y == 1 ? '1 año' : '$y años'} y ${m == 1 ? '1 mes' : '$m meses'}';
+  String? _ageLabel() {
+    final dob = widget.babyDob;
+    return dob != null ? formatBabyAge(dob, _date) : null;
   }
 
   String _fmtDate(DateTime d) {
@@ -66,35 +62,53 @@ class _MilestoneEditSheetState extends State<MilestoneEditSheet> {
     return '${d.day} ${m[d.month - 1]} ${d.year}';
   }
 
+  // Sin `imageQuality` para conservar el EXIF; se comprime al subir.
   Future<void> _pickImage() async {
-    final xf = await _picker.pickImage(
-        source: ImageSource.gallery, imageQuality: 85);
-    if (xf != null) setState(() => _newMedia = File(xf.path));
+    final xf = await _picker.pickImage(source: ImageSource.gallery);
+    if (xf == null) return;
+    final file = File(xf.path);
+    final captured = captureDateWithin(
+      await readCaptureDate(file, 'image'),
+      widget.babyDob,
+    );
+    if (!mounted) return;
+    setState(() {
+      _newMedia = file;
+      if (captured != null) _date = captured;
+      _dateFromMedia = captured != null;
+    });
   }
 
   Future<void> _save() async {
     if (_titleCtrl.text.trim().isEmpty) return;
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _progress = null;
+    });
     try {
-      final updated = await _service.update(
-        id: widget.milestone.id,
-        title: _titleCtrl.text.trim(),
-        description: _descCtrl.text.trim().isEmpty
-            ? null
-            : _descCtrl.text.trim(),
-        date: _date,
-        category: _category,
-        newMediaFile: _newMedia,
-        existingMediaUrl: widget.milestone.mediaUrl,
-        mediaType: _newMedia != null ? 'image' : widget.milestone.mediaType,
-        emoji: catFor(_category).emoji,
+      final original = widget.milestone;
+      await ref.read(milestonesProvider(original.babyId).notifier).edit(
+        onProgress: (p) {
+          if (mounted) setState(() => _progress = p);
+        },
+        original,
+        MilestoneInput(
+          title: _titleCtrl.text.trim(),
+          description: _descCtrl.text.trim().isEmpty
+              ? null
+              : _descCtrl.text.trim(),
+          date: _date,
+          category: _category,
+          mediaFile: _newMedia,
+          mediaType: _newMedia != null ? 'image' : original.mediaType,
+          emoji: catFor(_category).emoji,
+        ),
       );
-      widget.onUpdated(updated);
       if (mounted) Navigator.pop(context);
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          const SnackBar(content: Text('No se pudo guardar el recuerdo')),
         );
       }
     } finally {
@@ -113,9 +127,9 @@ class _MilestoneEditSheetState extends State<MilestoneEditSheet> {
 
     final previewImage = _newMedia != null
         ? DecorationImage(image: FileImage(_newMedia!), fit: BoxFit.cover)
-        : (widget.milestone.mediaUrl != null
+        : (widget.milestone.isImage
             ? DecorationImage(
-                image: NetworkImage(widget.milestone.mediaUrl!),
+                image: CachedNetworkImageProvider(widget.milestone.mediaUrl!),
                 fit: BoxFit.cover)
             : null);
 
@@ -263,10 +277,15 @@ class _MilestoneEditSheetState extends State<MilestoneEditSheet> {
                   final d = await showDatePicker(
                     context: context,
                     initialDate: _date,
-                    firstDate: widget.babyDob,
+                    firstDate: widget.babyDob ?? DateTime(2000),
                     lastDate: DateTime.now(),
                   );
-                  if (d != null) setState(() => _date = d);
+                  if (d != null) {
+                    setState(() {
+                      _date = d;
+                      _dateFromMedia = false;
+                    });
+                  }
                 },
                 child: Container(
                   padding: const EdgeInsets.all(12),
@@ -289,8 +308,12 @@ class _MilestoneEditSheetState extends State<MilestoneEditSheet> {
                                   fontSize: 14,
                                   fontWeight: FontWeight.w700,
                                   color: Color(0xFF4A90D9))),
-                          Text('Tenía ${_ageLabel()}',
-                              style: TextStyle(fontSize: 11, color: textSec)),
+                          if (_ageLabel() case final age?)
+                            Text('Tenía $age',
+                                style: TextStyle(fontSize: 11, color: textSec)),
+                          if (_dateFromMedia)
+                            Text('Fecha leída de la foto',
+                                style: TextStyle(fontSize: 11, color: textSec)),
                         ],
                       ),
                       const Spacer(),
@@ -349,27 +372,11 @@ class _MilestoneEditSheetState extends State<MilestoneEditSheet> {
               const SizedBox(height: 20),
 
               // Guardar
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _loading ? null : _save,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4A90D9),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
-                    elevation: 0,
-                  ),
-                  child: _loading
-                      ? const SizedBox(
-                          width: 20, height: 20,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white))
-                      : const Text('Guardar cambios',
-                          style: TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w800)),
-                ),
+              SaveProgressButton(
+                label: 'Guardar cambios',
+                busy: _loading,
+                progress: _progress,
+                onPressed: _save,
               ),
             ],
           ),

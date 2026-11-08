@@ -314,20 +314,22 @@ class ApiService {
           },
         );
 
-    try {
-      final response = await http.get(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-      );
+    // Lanzamos en vez de devolver null para que la pantalla muestre el error
+    // en lugar de un "Sin datos" engañoso.
+    final response = await http.get(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+    );
 
-      if (response.statusCode == 200) {
-        final jsonResponse = jsonDecode(response.body);
-        return jsonResponse['data'];
-      }
-
-      return null;
-    } catch (e) {
-      return null;
+    if (response.statusCode != 200) {
+      String detail = 'Error ${response.statusCode}';
+      try {
+        detail = jsonDecode(utf8.decode(response.bodyBytes))['detail']?.toString() ?? detail;
+      } catch (_) {}
+      throw Exception(detail);
     }
+
+    final jsonResponse = jsonDecode(utf8.decode(response.bodyBytes));
+    return jsonResponse['data'];
   }
 }

@@ -53,6 +53,8 @@ class _DateSelectorState extends ConsumerState<DateSelector> {
     super.initState();
     _pageController = PageController(initialPage: _baseIndex);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // En modo rango no se pinta el PageView, así que el controller no tiene cliente
+      if (!mounted || !_pageController.hasClients) return;
       final selectedDate  = ref.read(selectedDateProvider);
       final selectedRange = ref.read(selectedDateRangeProvider);
       final targetDate    = widget.isRangeMode ? selectedRange.end : selectedDate;
