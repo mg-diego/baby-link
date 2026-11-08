@@ -3,7 +3,7 @@ from zoneinfo import ZoneInfo
 
 from core.errors import InvalidInputError, NotFoundError
 from core.timeutils import local_date, parse_ts
-from models.event_models import EventBase, EventCategory, EventUpdate
+from models.event_models import EventCategory, EventCreate, EventUpdate
 from repositories.event_repository import EventRepository
 from services.event_validation import validate_metadata, validate_timing
 
@@ -16,16 +16,15 @@ SIMPLE_CATEGORIES = tuple(
 
 
 class EventService:
-    def __init__(self, repository: EventRepository, tz: ZoneInfo):
+    def __init__(self, repository: EventRepository):
         self.repository = repository
-        self.tz = tz
 
     # ─── Escritura ────────────────────────────────────────────────────────────
 
-    def register_event(self, event: EventBase) -> dict:
+    def register_event(self, baby_id: str, event: EventCreate) -> dict:
         validate_timing(event.category, event.start_time, event.end_time, event.metadata)
         validate_metadata(event.category, event.metadata)
-        return self.repository.save(event.model_dump(mode="json"))
+        return self.repository.save({**event.model_dump(mode="json"), "baby_id": baby_id})
 
     def update_event(self, current: dict, update_data: EventUpdate) -> dict:
         """Actualiza un evento existente (cerrar cronómetros, corregir horas o metadatos).
@@ -70,10 +69,13 @@ class EventService:
             if e["category"] != EventCategory.FEED.value or (e.get("metadata") or {}).get("type") == "nursing"
         ]
 
-    def get_valid_event_dates(self, baby_id: str) -> list[str]:
-        """Días (en hora local) con al menos un evento, para el calendario."""
+    def get_valid_event_dates(self, baby_id: str, tz: ZoneInfo) -> list[str]:
+        """Días (en hora local del bebé) con al menos un evento, para el calendario."""
+        from_sql = self.repository.get_event_dates(baby_id, tz.key)
+        if from_sql is not None:
+            return from_sql
         dates = {
-            local_date(parse_ts(row["start_time"]), self.tz).isoformat()
+            local_date(parse_ts(row["start_time"]), tz).isoformat()
             for row in self.repository.get_all_start_times(baby_id)
             if row.get("start_time")
         }
@@ -83,6 +85,10 @@ class EventService:
         return self.repository.get_by_category(baby_id, EventCategory.GROWTH.value)
 
     def get_last_events_by_category(self, baby_id: str) -> Dict[str, Optional[str]]:
+        from_sql = self.repository.get_last_event_times(baby_id)
+        if from_sql is not None:
+            return from_sql
+
         recent = self.repository.get_latest(baby_id, limit=RECENT_WINDOW)
         last = _collect_last(recent)
 

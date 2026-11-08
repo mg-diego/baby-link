@@ -9,7 +9,7 @@ final babyProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
     return null;
   }
 
-  final babies = await ApiService.getBabies(user.id);
+  final babies = await ApiService.getBabies();
   
   if (babies.isNotEmpty) {
     return babies.first as Map<String, dynamic>;

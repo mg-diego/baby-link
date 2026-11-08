@@ -30,11 +30,7 @@ class _BabyFormScreenState extends ConsumerState<BabyFormScreen> {
     try {
       final dob = _selectedDate.toIso8601String().split('T')[0];
       
-      final newId = await ApiService.registerBaby(
-        _nameController.text,
-        dob,
-        user.id,
-      );
+      final newId = await ApiService.registerBaby(_nameController.text, dob);
       
       ref.invalidate(babyProvider);
       

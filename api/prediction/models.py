@@ -67,6 +67,9 @@ class SleepProfile:
     night_minutes: float       # dormir -> despertar
     wake_clock: float          # hora habitual de despertar, minutos desde medianoche local
     samples: dict              # nº de muestras por métrica (diagnóstico)
+    # Minutos que se acorta la tarde por cada minuto de siesta "perdido" (0 = no compensa).
+    # Se aprende del historial: unos bebés se duermen antes tras una mala siesta y otros no.
+    deficit_slope: float = 0.0
 
     def nap_duration(self, index: int) -> float:
         return self.nap_minutes[min(max(index, 1), len(self.nap_minutes)) - 1]

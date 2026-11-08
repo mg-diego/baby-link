@@ -158,23 +158,25 @@ final validEventDatesProvider = FutureProvider.family<Set<DateTime>, String>((
   }
 });
 
-final sleepPredictionProvider =
-    FutureProvider.family<List<SleepPrediction>, String>((ref, babyId) async {
-      final raw = await ApiService.getSleepPredictions(babyId);
-      return raw
-          .cast<Map<String, dynamic>>()
-          .map(SleepPrediction.fromJson)
-          .toList();
-    });
+typedef Predictions = ({List<SleepPrediction> schedule, SleepPrediction? wake});
 
-final wakePredictionProvider = FutureProvider.family<SleepPrediction?, String>((
-  ref,
-  babyId,
-) async {
-  final rawData = await ApiService.getWakePrediction(babyId);
-  if (rawData == null) return null;
-  return SleepPrediction.fromJson(rawData);
+/// Una sola llamada a la API para la agenda y el despertar. Para refrescar las
+/// predicciones basta con invalidar este provider.
+final predictionsProvider = FutureProvider.family<Predictions, String>((ref, babyId) async {
+  final raw = await ApiService.getPredictions(babyId);
+  return (
+    schedule: raw.schedule.cast<Map<String, dynamic>>().map(SleepPrediction.fromJson).toList(),
+    wake: raw.wake == null ? null : SleepPrediction.fromJson(raw.wake!),
+  );
 });
+
+final sleepPredictionProvider = FutureProvider.family<List<SleepPrediction>, String>(
+  (ref, babyId) async => (await ref.watch(predictionsProvider(babyId).future)).schedule,
+);
+
+final wakePredictionProvider = FutureProvider.family<SleepPrediction?, String>(
+  (ref, babyId) async => (await ref.watch(predictionsProvider(babyId).future)).wake,
+);
 
 final lastEventsProvider = FutureProvider.family<Map<String, String?>, String>((
   ref,

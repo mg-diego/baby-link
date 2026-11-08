@@ -1,10 +1,16 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
+
 import 'package:app/features/analytics/models/daily_summary.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../constants.dart';
 
+/// Cliente de la API. Todas las respuestas tienen la forma `{status, data}`.
 class ApiService {
+  // ─── Infraestructura ───────────────────────────────────────────────────────
+
   /// Cabeceras comunes: la API exige el access token de Supabase del usuario.
   static Future<Map<String, String>> _headers() async {
     final headers = {'Content-Type': 'application/json'};
@@ -23,55 +29,60 @@ class ApiService {
     return headers;
   }
 
-  // BABIES
-  static Future<String?> registerBaby(
-    String name,
-    String dob,
-    String userId,
-  ) async {
-    final response = await http.post(
-      Uri.parse('${AppConstants.apiUrl}/babies'),
-      headers: await _headers(),
-      body: jsonEncode({'name': name, 'dob': dob, 'user_id': userId}),
-    );
+  static Uri _uri(String path, [Map<String, String>? query]) =>
+      Uri.parse('${AppConstants.apiUrl}$path').replace(queryParameters: query);
 
+  static String _day(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  static dynamic _decode(http.Response response) => jsonDecode(utf8.decode(response.bodyBytes));
+
+  /// Campo `data` de una respuesta 200, o excepción con el `detail` de la API.
+  static dynamic _data(http.Response response, String what) {
+    if (response.statusCode == 204) return null;
     if (response.statusCode == 200 || response.statusCode == 201) {
-      final data = jsonDecode(response.body);
-      return data['data']['id'];
+      return _decode(response)['data'];
     }
-    throw Exception('Error al registrar bebe');
+    String detail = 'HTTP ${response.statusCode}';
+    try {
+      detail = _decode(response)['detail']?.toString() ?? detail;
+    } catch (_) {}
+    throw Exception('$what: $detail');
   }
 
-  static Future<List<dynamic>> getBabies(String userId) async {
-    final response = await http.get(
-      Uri.parse('${AppConstants.apiUrl}/babies/$userId'),
+  static void _log(String message) => developer.log(message, name: 'ApiService');
+
+  // ─── Bebés ─────────────────────────────────────────────────────────────────
+
+  /// El dueño es el usuario de la sesión (lo deduce la API del token).
+  static Future<String?> registerBaby(String name, String dob) async {
+    final response = await http.post(
+      _uri('/babies'),
       headers: await _headers(),
+      body: jsonEncode({'name': name, 'dob': dob}),
     );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return data['data'];
-    }
-    return [];
+    return _data(response, 'Error al registrar bebé')['id'] as String?;
   }
 
-  static Future<Map<String, dynamic>> updateBaby(
-    String babyId,
-    Map<String, dynamic> updateData,
-  ) async {
+  /// Bebés del usuario de la sesión.
+  static Future<List<dynamic>> getBabies() async {
+    final response = await http.get(_uri('/me/babies'), headers: await _headers());
+    if (response.statusCode != 200) return [];
+    return _decode(response)['data'] as List<dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> updateBaby(String babyId, Map<String, dynamic> updateData) async {
     final response = await http.patch(
-      Uri.parse('${AppConstants.apiUrl}/babies/$babyId'),
+      _uri('/babies/$babyId'),
       headers: await _headers(),
       body: jsonEncode(updateData),
     );
-
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body)['data'] as Map<String, dynamic>;
-    }
-    throw Exception('Error al actualizar bebé (HTTP ${response.statusCode}): ${response.body}');
+    return _data(response, 'Error al actualizar bebé') as Map<String, dynamic>;
   }
 
-  //EVENTS
+  // ─── Eventos ───────────────────────────────────────────────────────────────
+
+  /// Devuelve la respuesta completa (`{status, data}`); el id está en `data.id`.
   static Future<Map<String, dynamic>> registerEvent(
     String babyId,
     String category,
@@ -79,240 +90,116 @@ class ApiService {
     DateTime? startTime,
   }) async {
     final response = await http.post(
-      Uri.parse('${AppConstants.apiUrl}/events/register'),
+      _uri('/babies/$babyId/events'),
       headers: await _headers(),
       body: jsonEncode({
-        'baby_id': babyId,
         'category': category,
         'start_time': (startTime ?? DateTime.now()).toUtc().toIso8601String(),
         'metadata': metadata,
       }),
     );
-
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      return jsonDecode(response.body) as Map<String, dynamic>;
-    } else {
-      throw Exception(
-        'Error al registrar evento (HTTP ${response.statusCode}): ${response.body}',
-      );
-    }
+    _data(response, 'Error al registrar evento');
+    return _decode(response) as Map<String, dynamic>;
   }
 
-  static Future<List<Map<String, dynamic>>> getActiveEvents(
-    String babyId,
-  ) async {
-    final url = Uri.parse('${AppConstants.apiUrl}/events/active/$babyId');
-
+  static Future<List<Map<String, dynamic>>> getActiveEvents(String babyId) async {
     try {
-      final response = await http.get(
-        url,
-        headers: await _headers(),
-      );
-
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        final dataList = decoded['data'] as List;
-        return dataList.map((e) => e as Map<String, dynamic>).toList();
-      }
-      return [];
+      final response = await http.get(_uri('/babies/$babyId/events/active'), headers: await _headers());
+      if (response.statusCode != 200) return [];
+      return (_decode(response)['data'] as List).cast<Map<String, dynamic>>();
     } catch (e) {
-      print('Error obteniendo eventos activos: $e');
+      _log('Error obteniendo eventos activos: $e');
       return [];
     }
   }
 
   static Future<List<String>> getValidEventDates(String babyId) async {
-    final url = Uri.parse('${AppConstants.apiUrl}/events/valid-dates/$babyId');
-
-    try {
-      final response = await http.get(
-        url,
-        headers: await _headers(),
-      );
-
-      if (response.statusCode != 200) {
-        final errorMsg =
-            jsonDecode(response.body)['detail'] ?? 'Error desconocido';
-        throw Exception(errorMsg);
-      }
-
-      final data = jsonDecode(response.body);
-      if (data['status'] == 'success') {
-        return List<String>.from(data['dates']);
-      } else {
-        throw Exception(data['message'] ?? 'Error al obtener fechas');
-      }
-    } catch (e) {
-      print('Error en GET /events/valid-dates/$babyId: $e');
-      rethrow;
-    }
+    final response = await http.get(_uri('/babies/$babyId/events/dates'), headers: await _headers());
+    return List<String>.from(_data(response, 'Error al obtener fechas') as List);
   }
 
   static Future<Map<String, String?>> getLastEvents(String babyId) async {
-    final url = Uri.parse('${AppConstants.apiUrl}/events/last/$babyId');
-
-    try {
-      final response = await http.get(
-        url,
-        headers: await _headers(),
-      );
-
-      if (response.statusCode != 200) {
-        final errorMsg = jsonDecode(response.body)['detail'] ?? 'Error desconocido';
-        throw Exception(errorMsg);
-      }
-
-      final Map<String, dynamic> data = jsonDecode(response.body);
-      
-      final Map<String, String?> safeMap = {};
-      
-      data.forEach((key, value) {
-        safeMap[key] = value?.toString();
-      });
-
-      return safeMap;
-      
-    } catch (e) {
-      print('Error en GET /events/last/$babyId: $e');
-      rethrow;
-    }
+    final response = await http.get(_uri('/babies/$babyId/events/last'), headers: await _headers());
+    final data = _data(response, 'Error al obtener los últimos eventos') as Map<String, dynamic>;
+    return data.map((key, value) => MapEntry(key, value?.toString()));
   }
 
   static Future<List<Map<String, dynamic>>> getGrowthHistory(String babyId) async {
-    final response = await http.get(
-      Uri.parse('${AppConstants.apiUrl}/events/growth/$babyId'),
-      headers: await _headers(),
-    );
-
-    if (response.statusCode == 200) {
-      final dataList = jsonDecode(response.body)['data'] as List;
-      return dataList.cast<Map<String, dynamic>>();
-    }
-    throw Exception('Error al obtener crecimiento (HTTP ${response.statusCode})');
+    final response = await http.get(_uri('/babies/$babyId/growth'), headers: await _headers());
+    return (_data(response, 'Error al obtener crecimiento') as List).cast<Map<String, dynamic>>();
   }
 
-  static Future<Map<String, dynamic>> updateEvent(
-    String eventId,
-    Map<String, dynamic> updateData,
-  ) async {
-    final url = Uri.parse('${AppConstants.apiUrl}/events/$eventId');
-
-    try {
-      final response = await http.patch(
-        url,
-        headers: await _headers(),
-        body: jsonEncode(updateData),
-      );
-
-      if (response.statusCode == 200) {
-        final decodedResponse = jsonDecode(response.body);
-        return decodedResponse['data'] as Map<String, dynamic>;
-      } else {
-        final errorMsg =
-            jsonDecode(response.body)['detail'] ?? 'Error desconocido';
-        throw Exception('Falló la actualización: $errorMsg');
-      }
-    } catch (e) {
-      print('Error en PATCH /events/$eventId: $e');
-      rethrow;
-    }
+  static Future<Map<String, dynamic>> updateEvent(String eventId, Map<String, dynamic> updateData) async {
+    final response = await http.patch(
+      _uri('/events/$eventId'),
+      headers: await _headers(),
+      body: jsonEncode(updateData),
+    );
+    return _data(response, 'Falló la actualización') as Map<String, dynamic>;
   }
 
   static Future<void> deleteEvent(String eventId) async {
-    final url = Uri.parse('${AppConstants.apiUrl}/events/$eventId');
-
-    try {
-      final response = await http.delete(
-        url,
-        headers: await _headers(),
-      );
-
-      if (response.statusCode != 200 && response.statusCode != 204) {
-        final errorMsg =
-            jsonDecode(response.body)['detail'] ?? 'Error desconocido';
-        throw Exception(errorMsg);
-      }
-    } catch (e) {
-      print('Error en DELETE /events/$eventId: $e');
-      rethrow;
-    }
+    final response = await http.delete(_uri('/events/$eventId'), headers: await _headers());
+    _data(response, 'Error al borrar el evento');
   }
 
-  // ANALYTICS
-  static Future<DailySummary?> getDailySummary(
-    String babyId,
-    DateTime targetDate,
-  ) async {
-    final dateStr = targetDate.toIso8601String().split('T')[0];
-
+  static Future<List<dynamic>> getEventsByDateRange(String babyId, DateTime startDate, DateTime endDate) async {
     final response = await http.get(
-      Uri.parse(
-        '${AppConstants.apiUrl}/analytics/$babyId/daily-summary?target_date=$dateStr',
-      ),
+      _uri('/babies/$babyId/events', {'start_date': _day(startDate), 'end_date': _day(endDate)}),
       headers: await _headers(),
     );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return DailySummary.fromJson(data);
-    }
-    return null;
+    if (response.statusCode != 200) return [];
+    return _decode(response)['data'] as List<dynamic>;
   }
 
-  static Future<List<dynamic>> getEventsByDateRange(
-    String babyId,
-    DateTime startDate,
-    DateTime endDate,
-  ) async {
-    final startStr = startDate.toIso8601String().split('T')[0];
-    final endStr = endDate.toIso8601String().split('T')[0];
+  // ─── Análisis ──────────────────────────────────────────────────────────────
 
+  static Future<DailySummary?> getDailySummary(String babyId, DateTime targetDate) async {
     final response = await http.get(
-      Uri.parse(
-        '${AppConstants.apiUrl}/analytics/$babyId/events?start_date=$startStr&end_date=$endStr',
-      ),
+      _uri('/babies/$babyId/summary', {'date': _day(targetDate)}),
       headers: await _headers(),
     );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return data is List ? data : data['data'];
-    }
-    return [];
+    if (response.statusCode != 200) return null;
+    return DailySummary.fromJson(_decode(response)['data'] as Map<String, dynamic>);
   }
 
-  static Future<List<dynamic>> getSleepPredictions(String babyId) async {
-    final response = await http.get(
-      Uri.parse('${AppConstants.apiUrl}/analytics/$babyId/sleep-prediction'),
-      headers: await _headers(),
+  /// Agenda de sueño y despertar previsto en una sola llamada. Con pocos datos
+  /// la API responde `insufficient_data` con agenda vacía y sin despertar.
+  static Future<({List<dynamic> schedule, Map<String, dynamic>? wake})> getPredictions(String babyId) async {
+    final response = await http.get(_uri('/babies/$babyId/predictions'), headers: await _headers());
+    if (response.statusCode != 200) return (schedule: <dynamic>[], wake: null);
+    final data = _decode(response)['data'] as Map<String, dynamic>;
+    final wake = data['wake'];
+    return (
+      schedule: (data['schedule'] as List?) ?? <dynamic>[],
+      wake: wake is Map<String, dynamic> ? wake : null,
     );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      if (data is List) return data;
-      // Con pocos datos la API devuelve status "insufficient_data" y data: []
-      final list = data['data'];
-      return list is List ? list : [];
-    }
-
-    return [];
   }
 
-  static Future<Map<String, dynamic>?> getWakePrediction(String babyId) async {
-    final response = await http.get(
-      Uri.parse('${AppConstants.apiUrl}/analytics/$babyId/wake-prediction'),
-      headers: await _headers(),
-    );
+  /// Códigos de la API para las etiquetas de la pantalla de estadísticas.
+  static const statCategoryCodes = {
+    'Sueño': 'sleep',
+    'Alimentación': 'feeding',
+    'Pañales': 'diapers',
+    'Crecimiento': 'growth',
+  };
+  static const statSubcategoryCodes = {
+    'Todo': 'all',
+    'Siestas': 'naps',
+    'Nocturno': 'night',
+    'Despertares': 'wakings',
+    'Biberón': 'bottle',
+    'Lactancia': 'nursing',
+    'Sólidos': 'solids',
+    'Mojado': 'wet',
+    'Sucio': 'dirty',
+    'Peso': 'weight',
+    'Altura': 'height',
+    'Perímetro': 'head',
+  };
 
-    if (response.statusCode == 200) {
-      final jsonResponse = jsonDecode(response.body);
-      final data = jsonResponse['data'];
-      return data is Map<String, dynamic> ? data : null;
-    }
-
-    return null;
-  }
-
+  /// Lanza en vez de devolver null para que la pantalla muestre el error en
+  /// lugar de un "Sin datos" engañoso.
   static Future<Map<String, dynamic>?> getStats({
     required String babyId,
     required DateTime startDate,
@@ -320,39 +207,15 @@ class ApiService {
     required String category,
     String subcategory = 'Todo',
   }) async {
-    // Formateamos las fechas a YYYY-MM-DD para FastAPI
-    final startStr =
-        '${startDate.year}-${startDate.month.toString().padLeft(2, '0')}-${startDate.day.toString().padLeft(2, '0')}';
-    final endStr =
-        '${endDate.year}-${endDate.month.toString().padLeft(2, '0')}-${endDate.day.toString().padLeft(2, '0')}';
-
-    // Usamos .replace para añadir los query parameters de forma segura
-    final uri = Uri.parse('${AppConstants.apiUrl}/analytics/$babyId/stats')
-        .replace(
-          queryParameters: {
-            'start_date': startStr,
-            'end_date': endStr,
-            'category': category,
-            'subcategory': subcategory,
-          },
-        );
-
-    // Lanzamos en vez de devolver null para que la pantalla muestre el error
-    // en lugar de un "Sin datos" engañoso.
     final response = await http.get(
-      uri,
+      _uri('/babies/$babyId/stats', {
+        'start_date': _day(startDate),
+        'end_date': _day(endDate),
+        'category': statCategoryCodes[category] ?? category,
+        'subcategory': statSubcategoryCodes[subcategory] ?? subcategory,
+      }),
       headers: await _headers(),
     );
-
-    if (response.statusCode != 200) {
-      String detail = 'Error ${response.statusCode}';
-      try {
-        detail = jsonDecode(utf8.decode(response.bodyBytes))['detail']?.toString() ?? detail;
-      } catch (_) {}
-      throw Exception(detail);
-    }
-
-    final jsonResponse = jsonDecode(utf8.decode(response.bodyBytes));
-    return jsonResponse['data'];
+    return _data(response, 'Error al cargar estadísticas') as Map<String, dynamic>?;
   }
 }

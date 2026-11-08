@@ -11,12 +11,6 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from dotenv import load_dotenv
 
 
-def _as_bool(value: str | None, default: bool) -> bool:
-    if value is None or value.strip() == "":
-        return default
-    return value.strip().lower() in ("1", "true", "yes", "on")
-
-
 @dataclass(frozen=True)
 class Settings:
     supabase_url: str
@@ -24,9 +18,6 @@ class Settings:
     # Solo para proyectos con la clave JWT "legacy" (HS256). Con claves asimétricas
     # (ES256/RS256) los tokens se validan contra el JWKS público de Supabase.
     supabase_jwt_secret: str | None
-    # Desactivar únicamente durante la transición mientras haya versiones de la app
-    # que todavía no envían el token.
-    auth_enabled: bool
     home_assistant_api_key: str | None
     timezone: str
     cors_origins: tuple[str, ...]
@@ -56,7 +47,6 @@ def get_settings() -> Settings:
         supabase_url=os.environ["SUPABASE_URL"].rstrip("/"),
         supabase_key=os.environ["SUPABASE_KEY"],
         supabase_jwt_secret=os.environ.get("SUPABASE_JWT_SECRET") or None,
-        auth_enabled=_as_bool(os.environ.get("AUTH_ENABLED"), default=True),
         home_assistant_api_key=os.environ.get("HOME_ASSISTANT_API_KEY") or None,
         timezone=timezone,
         cors_origins=origins or ("*",),

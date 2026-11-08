@@ -3,6 +3,7 @@ from typing import List
 from core.errors import InvalidInputError, NotFoundError
 from models.baby_models import BabyCreate, BabyUpdate
 from repositories.baby_repository import BabyRepository
+from services.access_service import AccessService
 
 
 class BabyService:
@@ -10,11 +11,10 @@ class BabyService:
         self.repository = repository
 
     def register_baby(self, baby: BabyCreate, owner_id: str) -> dict:
-        return self.repository.save({
-            "name": baby.name,
-            "dob": baby.dob.isoformat(),
-            "user_id": owner_id,
-        })
+        data = {"name": baby.name, "dob": baby.dob.isoformat(), "user_id": owner_id}
+        if baby.timezone:  # columna opcional (migración 001): solo se envía si se indica
+            data["timezone"] = baby.timezone
+        return self.repository.save(data)
 
     def get_babies(self, user_id: str) -> List[dict]:
         return self.repository.get_by_user(user_id)
@@ -27,4 +27,5 @@ class BabyService:
         updated = self.repository.update(baby_id, update_dict)
         if not updated:
             raise NotFoundError("Bebé no encontrado")
+        AccessService.forget(baby_id)  # puede haber cambiado la zona horaria
         return updated

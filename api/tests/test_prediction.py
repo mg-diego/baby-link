@@ -51,10 +51,13 @@ def test_ongoing_nap_does_not_pull_bedtime_earlier():
     assert abs(minutes(local(TODAY, 19), bedtime(ongoing))) <= 5
 
 
-def test_short_naps_bring_bedtime_forward():
+def test_short_naps_get_a_rescue_catnap():
+    # Dos siestas de 30': sin una siesta extra la noche llegaría a las 16:30
     base = HISTORY + [event("woke_up", local(TODAY, 7)), event("nap", local(TODAY, 9, 30), local(TODAY, 10, 0))]
     out = run(base + [event("nap", local(TODAY, 12, 30), local(TODAY, 13, 0))], local(TODAY, 13, 5))
-    assert bedtime(out) < local(TODAY, 18, 30)
+    rescue = naps(out)
+    assert len(rescue) == 1 and rescue[0]["is_catnap"] and rescue[0]["index"] == 3
+    assert local(TODAY, 18) <= bedtime(out) <= local(TODAY, 20)
 
 
 def test_early_morning_before_woke_up_is_logged():
@@ -159,8 +162,9 @@ def test_forgotten_bedtime_does_not_merge_days():
 
 def test_insufficient_data_counts_only_sleep_events():
     rows = [event("diaper", local(FIRST + timedelta(days=d), h)) for d in range(10) for h in range(8, 20)]
-    rows += make_history(FIRST, 5)  # 20 eventos de sueño, pero solo 5 días
-    out = run(rows, local(FIRST + timedelta(days=5), 12))
+    # 10 eventos de sueño, pero solo 2 días
+    rows += make_history(FIRST, 2, windows=(120, 150, 150), naps=(60, 60, 40), evening=150)
+    out = run(rows, local(FIRST + timedelta(days=2), 12))
     assert out.insufficient.reason == "insufficient_days"
     assert out.schedule == [] and out.wake is None
 
@@ -191,3 +195,22 @@ def test_feedback_ignores_legacy_and_overdue_predictions():
     overdue = [_fb_event("bed_time", base + timedelta(days=d, minutes=40), (base + timedelta(days=d)).isoformat(),
                          applied=0, overdue=True) for d in range(5, 10)]
     assert compute_biases(parse_events(legacy + overdue), DEFAULT_CONFIG).bedtime == 0
+
+
+# ─── Compensación por déficit de siesta (aprendida por bebé) ──────────────────
+
+def _deficit_history(slope: float) -> list[dict]:
+    rows = []
+    for i, deficit in enumerate([0, 30, 45, -20, 10, 40, 25, -15, 35, 0, 20, 45, -10, 30]):
+        rows += make_day(FIRST + timedelta(days=i), naps=(90, 90 - deficit), evening=210 - slope * deficit)
+    return rows
+
+
+@pytest.mark.parametrize("slope", [0.0, 0.8])
+def test_deficit_compensation_is_learned(slope):
+    base = _deficit_history(slope) + [event("woke_up", local(TODAY, 7)),
+                                      event("nap", local(TODAY, 9, 30), local(TODAY, 11))]
+    out = run(base + [event("nap", local(TODAY, 14), local(TODAY, 14, 45))], local(TODAY, 14, 50))
+    assert out.profile.deficit_slope == pytest.approx(slope * 14 / 19, abs=0.1)
+    expected = local(TODAY, 14, 45) + timedelta(minutes=210 - slope * 45)
+    assert abs(minutes(expected, bedtime(out))) <= 15

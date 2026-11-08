@@ -30,7 +30,7 @@ Future<void> backgroundCallback(Uri? uri) async {
 
   String? babyId;
   try {
-    final babies = await ApiService.getBabies(user.id);
+    final babies = await ApiService.getBabies();
     if (babies.isNotEmpty) {
       babyId = babies[0]['id'] as String?;
     }

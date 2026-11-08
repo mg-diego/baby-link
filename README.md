@@ -53,7 +53,7 @@ cd api
 python -m venv _venv
 _venv\Scripts\activate          # Windows
 # source _venv/bin/activate     # macOS / Linux
-pip install -r ../requirements.txt
+pip install -r requirements-dev.txt   # requirements.txt + pytest
 ```
 
 Crea `api/.env` (también ignorado por git):
@@ -63,26 +63,10 @@ SUPABASE_URL=https://<tu-proyecto>.supabase.co
 SUPABASE_KEY=<tu-service-role-key>
 
 # Opcionales
-SUPABASE_JWT_SECRET=<jwt-secret>   # solo si el proyecto usa la clave JWT legacy (HS256); valida los tokens sin llamar a Supabase
-AUTH_ENABLED=true                  # false solo durante la transición, mientras haya apps sin el token
+SUPABASE_JWT_SECRET=<jwt-secret>   # si el proyecto usa la clave JWT legacy (HS256): valida los tokens sin llamar a Supabase
 HOME_ASSISTANT_API_KEY=<clave>     # necesaria para /homeassistant/... (cabecera X-API-Key)
-APP_TIMEZONE=Europe/Madrid         # zona para "hoy", calendario, estadísticas y predicciones
+APP_TIMEZONE=Europe/Madrid         # zona por defecto de los bebés sin `timezone` propia
 CORS_ORIGINS=*
-```
-
-### Autenticación
-
-Todas las rutas exigen `Authorization: Bearer <access token de Supabase>` (la app lo envía automáticamente) y solo dan acceso a los bebés del usuario del token. Los tokens con claves asimétricas (ES256/RS256) se validan en local contra el JWKS del proyecto; con la clave HS256 legacy hace falta `SUPABASE_JWT_SECRET` o, si no está, se consulta a Supabase Auth (con caché).
-
-Home Assistant usa una clave propia: añade `X-API-Key: <HOME_ASSISTANT_API_KEY>` a los `headers` del sensor REST.
-
-### Tests y backtesting
-
-```bash
-cd api
-pip install pytest
-python -m pytest
-python -m tools.backtest --baby-id <uuid>     # error del motor de predicciones sobre el historial real (solo lectura)
 ```
 
 Arranca el servidor (`--host 0.0.0.0` permite que un móvil físico lo alcance):
@@ -94,3 +78,45 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 La documentación interactiva queda en <http://localhost:8000/docs>.
 
 > La `service_role` key da acceso total a la base de datos: úsala solo en el servidor y nunca la incluyas en la app ni en el repositorio.
+
+### Estructura
+
+| Carpeta | Qué contiene |
+|---|---|
+| `routers/` | Endpoints HTTP, uno por recurso |
+| `services/` | Lógica de negocio (`analytics/` separado por dominio) |
+| `repositories/` | Acceso a Supabase |
+| `prediction/` | Motor de predicciones de sueño: funciones puras, sin BD ni reloj |
+| `models/` | Modelos de entrada, de respuesta (`{status, data}`) y de `metadata` por categoría |
+| `core/` | Configuración, autenticación, errores, fechas, paginación |
+| `tools/` | Backtesting del motor y normalización de datos antiguos |
+| `tests/` | `python -m pytest` |
+
+### Autenticación
+
+Todas las rutas exigen `Authorization: Bearer <access token de Supabase>` (la app lo envía automáticamente) y solo dan acceso a los bebés del usuario del token. Los tokens con claves asimétricas (ES256/RS256) se validan en local contra el JWKS del proyecto; con la clave HS256 legacy hace falta `SUPABASE_JWT_SECRET` o, si no está, se consulta a Supabase Auth (con caché).
+
+Home Assistant usa una clave propia: añade `X-API-Key: <HOME_ASSISTANT_API_KEY>` a los `headers` del sensor REST.
+
+### Base de datos (Supabase)
+
+Las migraciones están en [`supabase/migrations/`](supabase/migrations/). Aplícalas en orden desde el SQL Editor de Supabase (o con `supabase db push`):
+
+1. `..._baby_timezone.sql`: columna `babies.timezone` (zona IANA de cada bebé).
+2. `..._event_indexes.sql`: índices para las consultas por bebé, categoría y fecha.
+3. `..._event_functions.sql`: `event_dates` y `last_event_times`. Hasta que existan, la API usa una versión en Python más lenta.
+4. `..._rls_owner_only.sql`: RLS "solo el dueño" en tablas y Storage. **Borra las políticas existentes de `babies`, `baby_events` y `milestones`**; revísalas antes con la consulta que hay al principio del fichero.
+
+### Despliegue
+
+La API y la app cambian de contrato a la vez (rutas nuevas y token obligatorio): despliega la API, instala la app nueva y añade `X-API-Key` a Home Assistant.
+
+### Herramientas
+
+```bash
+cd api
+python -m pytest
+python -m tools.backtest --baby-id <uuid>                     # error del motor sobre el historial real (solo lectura)
+python -m tools.normalize_legacy_metadata --baby-id <uuid>    # simula la normalización de datos del CSV
+python -m tools.normalize_legacy_metadata --baby-id <uuid> --apply   # la aplica (reversible con --revert)
+```

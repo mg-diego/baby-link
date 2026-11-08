@@ -22,8 +22,7 @@ class EventActionService {
     
     ref.invalidate(dailySummaryProvider((babyId: babyId, date: currentDate)));
     ref.invalidate(lastEventsProvider(babyId));
-    ref.invalidate(sleepPredictionProvider(babyId));
-    ref.invalidate(wakePredictionProvider(babyId));
+    ref.invalidate(predictionsProvider(babyId));
     ref.invalidate(growthHistoryProvider(babyId));
   }
 

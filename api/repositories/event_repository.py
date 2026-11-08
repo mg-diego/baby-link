@@ -4,6 +4,7 @@ from typing import Iterable
 from supabase import Client
 
 from core.pagination import fetch_all
+from core.rpc import call_rpc
 
 TABLE = "baby_events"
 DURATION_CATEGORIES = ("nap", "night_waking", "feed", "pumping")
@@ -61,6 +62,16 @@ class EventRepository:
             .eq("baby_id", baby_id)
             .order("start_time").order("id")
         ))
+
+    def get_event_dates(self, baby_id: str, tz_name: str) -> list[str] | None:
+        """Días locales con eventos (función SQL). None si la función no existe aún."""
+        rows = call_rpc(self.db, "event_dates", {"p_baby_id": baby_id, "p_tz": tz_name})
+        return None if rows is None else [str(r["day"]) for r in rows]
+
+    def get_last_event_times(self, baby_id: str) -> dict[str, str] | None:
+        """Último start_time por clave (función SQL). None si la función no existe aún."""
+        rows = call_rpc(self.db, "last_event_times", {"p_baby_id": baby_id})
+        return None if rows is None else {r["key"]: r["start_time"] for r in rows}
 
     def get_latest(self, baby_id: str, limit: int = 1000, categories: Iterable[str] | None = None) -> list[dict]:
         """Los `limit` eventos más recientes (desc), opcionalmente de ciertas categorías."""

@@ -60,8 +60,8 @@ def plan_day(
     ww_first = profile.ww_first + biases.ww_first
     ww_mid = profile.ww_mid + biases.ww_mid
     ww_evening = profile.ww_evening
-    if deficit_min > cfg.deficit_threshold_min:
-        compensation = deficit_min * cfg.deficit_compensation
+    if deficit_min > cfg.deficit_threshold_min and profile.deficit_slope > 0:
+        compensation = deficit_min * profile.deficit_slope
         ww_mid = max(ww_mid * cfg.min_window_factor, ww_mid - compensation)
         ww_evening = max(ww_evening * cfg.min_window_factor, ww_evening - compensation)
 

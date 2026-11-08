@@ -7,8 +7,10 @@ class PredictionConfig:
 
     # ─── Datos ────────────────────────────────────────────────────────────────
     history_days: int = 28           # ventana de historial que se usa para aprender
-    min_sleep_events: int = 20       # mínimo para predecir (solo eventos de sueño)
-    min_days: int = 7                # mínimo de días distintos con eventos de sueño
+    # Con 3 días el backtest ya da errores comparables a los de régimen (los valores por
+    # edad cubren el arranque en frío), así que no hace falta esperar una semana.
+    min_sleep_events: int = 10       # mínimo para predecir (solo eventos de sueño)
+    min_days: int = 3                # mínimo de días distintos con eventos de sueño
 
     # ─── Aprendizaje del perfil ───────────────────────────────────────────────
     half_life_days: float = 7.0      # un dato de hace 7 días pesa la mitad que uno de hoy
@@ -27,7 +29,10 @@ class PredictionConfig:
 
     # ─── Generación de la agenda ──────────────────────────────────────────────
     deficit_threshold_min: float = 15.0   # déficit de siesta a partir del cual se acortan las ventanas
-    deficit_compensation: float = 0.85
+    # La compensación (minutos de ventana por minuto de siesta perdido) se aprende por bebé:
+    min_deficit_days: int = 5             # días con déficit/superávit claro necesarios para aprenderla
+    deficit_prior_days: float = 5.0       # con pocos días se encoge hacia 0 (no compensar)
+    max_deficit_slope: float = 1.0
     min_window_factor: float = 0.6        # una ventana nunca baja del 60 % de la aprendida
     catnap_min: float = 30.0
     bed_late_tolerance_min: float = 60.0  # cuánto puede retrasarse la hora de dormir sobre la habitual

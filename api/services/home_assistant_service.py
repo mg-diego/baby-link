@@ -7,6 +7,7 @@ from core.timeutils import local_midnight_utc, parse_ts, utc_now
 from models.event_models import EventCategory
 from repositories.baby_repository import BabyRepository
 from repositories.event_repository import EventRepository
+from services.access_service import resolve_timezone
 
 NAP = EventCategory.NAP.value
 BED = EventCategory.BED_TIME.value
@@ -27,12 +28,12 @@ class HomeAssistantService:
         self,
         baby_repository: BabyRepository,
         event_repository: EventRepository,
-        tz: ZoneInfo,
+        default_tz: ZoneInfo,
         clock: Callable[[], datetime] = utc_now,
     ):
         self.baby_repository = baby_repository
         self.event_repository = event_repository
-        self.tz = tz
+        self.default_tz = default_tz
         self.clock = clock
 
     def get_summary(self, baby_id: str) -> Dict[str, Any]:
@@ -40,8 +41,9 @@ class HomeAssistantService:
         if not baby:
             raise NotFoundError("Bebé no encontrado")
 
+        tz = resolve_timezone(baby.get("timezone"), self.default_tz)
         now = self.clock()
-        day_start = local_midnight_utc(now.astimezone(self.tz).date(), self.tz)
+        day_start = local_midnight_utc(now.astimezone(tz).date(), tz)
         events = [
             {**e, "_start": parse_ts(e["start_time"]), "_end": parse_ts(e.get("end_time"))}
             for e in self.event_repository.get_events_since(baby_id, day_start - LOOKBACK)

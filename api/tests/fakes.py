@@ -22,10 +22,6 @@ class FakeBabyRepository:
     def get_by_id(self, baby_id):
         return next((b for b in self.babies if b["id"] == baby_id), None)
 
-    def get_owner_id(self, baby_id):
-        baby = self.get_by_id(baby_id)
-        return baby["user_id"] if baby else None
-
     def update(self, baby_id, data):
         baby = self.get_by_id(baby_id)
         if baby:
@@ -75,6 +71,12 @@ class FakeEventRepository:
 
     def get_all_start_times(self, baby_id):
         return [{"start_time": e["start_time"]} for e in self.events if e["baby_id"] == baby_id]
+
+    def get_event_dates(self, baby_id, tz_name):
+        return None  # simula que la migración SQL aún no está aplicada
+
+    def get_last_event_times(self, baby_id):
+        return None
 
     def get_latest(self, baby_id, limit=1000, categories=None):
         rows = [e for e in reversed(self._asc(self.events))

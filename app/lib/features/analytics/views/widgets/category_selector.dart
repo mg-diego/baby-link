@@ -17,7 +17,7 @@ class StatsCategorySelector extends ConsumerWidget {
     _Cat('Crecimiento', Icons.show_chart_rounded, EventType.growth),
   ];
 
-  static const _subCategories = {
+  static const subCategories = {
     'Sueño': ['Todo', 'Siestas', 'Nocturno', 'Despertares'],
     'Alimentación': ['Todo', 'Biberón', 'Lactancia', 'Sólidos'],
     'Pañales': ['Todo', 'Mojado', 'Sucio'],
@@ -29,7 +29,7 @@ class StatsCategorySelector extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final mainCategory = ref.watch(selectedStatCategoryProvider);
     final subCategory = ref.watch(selectedStatSubCategoryProvider);
-    final subs = _subCategories[mainCategory] ?? [];
+    final subs = subCategories[mainCategory] ?? [];
     final activeCat = _categories.firstWhere((c) => c.name == mainCategory);
 
     return Column(
@@ -54,7 +54,7 @@ class StatsCategorySelector extends ConsumerWidget {
                       HapticFeedback.selectionClick();
                       ref.read(selectedStatCategoryProvider.notifier).state =
                           cat.name;
-                      final firstSub = _subCategories[cat.name]?.first;
+                      final firstSub = subCategories[cat.name]?.first;
                       ref.read(selectedStatSubCategoryProvider.notifier).state =
                           firstSub;
                     },

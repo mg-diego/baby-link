@@ -117,6 +117,7 @@ def learn_profile(days: list[SleepDay], dob: date, now: datetime, tz: ZoneInfo, 
     nap_minutes = tuple(
         est(naps_by_idx.get(idx, []), pooled_nap)[0] for idx in range(1, max(nap_count, 1) + 2)
     )
+    deficit_slope, n_slope = learn_deficit_slope(source, nap_minutes, evening, cfg)
     day_minutes, n_day = est(day_len, PRIOR_DAY_MINUTES)
     night_minutes, n_night = est(nights, PRIOR_NIGHT_MINUTES)
     wake_clock, n_wake = est(wake_clocks, PRIOR_WAKE_CLOCK, cfg.clock_prior_strength)
@@ -132,6 +133,32 @@ def learn_profile(days: list[SleepDay], dob: date, now: datetime, tz: ZoneInfo, 
         wake_clock=wake_clock,
         samples={
             "ww_first": n_first, "ww_mid": n_mid, "ww_evening": n_evening, "naps": n_naps,
-            "day": n_day, "night": n_night, "wake_clock": n_wake,
+            "day": n_day, "night": n_night, "wake_clock": n_wake, "deficit_slope": n_slope,
         },
+        deficit_slope=deficit_slope,
     )
+
+
+def learn_deficit_slope(
+    days: list[SleepDay], nap_minutes: tuple[float, ...], evening: float, cfg: PredictionConfig
+) -> tuple[float, int]:
+    """Regresión (por el origen) de "ventana de tarde - habitual" frente al déficit de siesta
+    del día. Pendiente acotada a [0, max] y encogida hacia 0 con pocos días informativos."""
+    def nap_duration(index: int) -> float:
+        return nap_minutes[min(max(index, 1), len(nap_minutes)) - 1]
+
+    xs, ys = [], []
+    for d in days:
+        if not (d.complete and d.naps):
+            continue
+        deficit = sum(nap_duration(n.index) - n.minutes for n in d.naps)
+        evening_window = _minutes(d.naps[-1].end, d.bed)
+        if abs(deficit) >= 10 and _in(evening_window, WW_RANGE):
+            xs.append(deficit)
+            ys.append(evening_window - evening)
+    n = len(xs)
+    if n < cfg.min_deficit_days:
+        return 0.0, n
+    slope = -sum(x * y for x, y in zip(xs, ys)) / sum(x * x for x in xs)
+    slope = min(max(slope, 0.0), cfg.max_deficit_slope)
+    return slope * n / (n + cfg.deficit_prior_days), n

@@ -33,16 +33,16 @@ def auth(sub: str = USER_A) -> dict:
 @pytest.fixture(autouse=True)
 def _clear_owner_cache():
     from services import access_service
-    access_service._owner_cache.clear()
+    access_service._baby_cache.clear()
     yield
-    access_service._owner_cache.clear()
+    access_service._baby_cache.clear()
 
 
 @pytest.fixture
 def settings():
     return Settings(
         supabase_url=SUPABASE_URL, supabase_key="x", supabase_jwt_secret=JWT_SECRET,
-        auth_enabled=True, home_assistant_api_key=HA_KEY, timezone="Europe/Madrid", cors_origins=("*",),
+        home_assistant_api_key=HA_KEY, timezone="Europe/Madrid", cors_origins=("*",),
     )
 
 

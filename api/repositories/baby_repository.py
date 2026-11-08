@@ -17,10 +17,6 @@ class BabyRepository:
         rows = self.db.table(TABLE).select("*").eq("id", baby_id).limit(1).execute().data
         return rows[0] if rows else None
 
-    def get_owner_id(self, baby_id: str) -> str | None:
-        rows = self.db.table(TABLE).select("user_id").eq("id", baby_id).limit(1).execute().data
-        return rows[0]["user_id"] if rows else None
-
     def update(self, baby_id: str, update_data: dict) -> dict | None:
         rows = self.db.table(TABLE).update(update_data).eq("id", baby_id).execute().data
         return rows[0] if rows else None

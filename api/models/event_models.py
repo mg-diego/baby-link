@@ -31,8 +31,8 @@ def _to_utc(value: Optional[datetime]) -> Optional[datetime]:
     return value.astimezone(UTC)
 
 
-class EventBase(BaseModel):
-    baby_id: str
+class EventCreate(BaseModel):
+    """Evento nuevo; el bebé va en la URL (POST /babies/{baby_id}/events)."""
     category: EventCategory
     start_time: datetime
     end_time: Optional[datetime] = None
