@@ -1,156 +1,125 @@
 from typing import Dict, Optional
-from fastapi import HTTPException
-from repositories.event_repository import EventRepository
+from zoneinfo import ZoneInfo
+
+from core.errors import InvalidInputError, NotFoundError
+from core.timeutils import local_date, parse_ts
 from models.event_models import EventBase, EventCategory, EventUpdate
+from repositories.event_repository import EventRepository
+from services.event_validation import validate_metadata, validate_timing
+
+RECENT_WINDOW = 1000
+FEED_TYPES = ("solids", "bottle", "nursing")
+# Categorías con clave propia en /events/last (pañales y tomas tienen claves por subtipo)
+SIMPLE_CATEGORIES = tuple(
+    c.value for c in EventCategory if c not in (EventCategory.FEED, EventCategory.DIAPER)
+)
+
 
 class EventService:
-    def __init__(self, repository: EventRepository):
+    def __init__(self, repository: EventRepository, tz: ZoneInfo):
         self.repository = repository
-        
-        # Mapa de validación de metadatos (¡Actualizado con los que faltaban!)
-        self._metadata_validators = {
-            EventCategory.FEED: self._validate_feed_metadata,
-            EventCategory.DIAPER: self._validate_diaper_metadata,
-            EventCategory.MEDICINE: self._validate_medicine_metadata,
-            EventCategory.TEMPERATURE: self._validate_temperature_metadata,
-            EventCategory.GROWTH: self._validate_growth_metadata,
-            EventCategory.PUMPING: self._validate_pumping_metadata,
-            EventCategory.MILESTONE: self._validate_milestone_metadata,
-        }
+        self.tz = tz
+
+    # ─── Escritura ────────────────────────────────────────────────────────────
 
     def register_event(self, event: EventBase) -> dict:
-        # 1. Validar estructura temporal según categoría
-        self._validate_event_timing(event)
+        validate_timing(event.category, event.start_time, event.end_time, event.metadata)
+        validate_metadata(event.category, event.metadata)
+        return self.repository.save(event.model_dump(mode="json"))
 
-        # 2. Validar metadatos específicos
-        metadata_validator = self._metadata_validators.get(event.category)
-        if metadata_validator:
-            metadata_validator(event.metadata)
-            
-        return self.repository.save(event.model_dump(mode='json'))
-    
-    def update_event(self, event_id: str, update_data: EventUpdate) -> dict:
-        """
-        Actualiza un evento existente. Ideal para cerrar cronómetros (añadir end_time)
-        o actualizar metadatos al finalizar una acción.
-        """
-        # exclude_unset=True extrae solo los campos que el cliente ha enviado explícitamente en el JSON
-        update_dict = update_data.model_dump(exclude_unset=True, mode='json')
-        
+    def update_event(self, current: dict, update_data: EventUpdate) -> dict:
+        """Actualiza un evento existente (cerrar cronómetros, corregir horas o metadatos).
+        Se validan las mismas reglas que al crear, sobre el estado resultante."""
+        update_dict = update_data.model_dump(exclude_unset=True, mode="json")
         if not update_dict:
-            raise HTTPException(
-                status_code=400, 
-                detail="El payload de actualización está vacío."
-            )
-            
-        try:
-            return self.repository.update(event_id, update_dict)
-        except ValueError as e:
-            raise HTTPException(status_code=404, detail=str(e))
-        
-    def get_valid_event_dates(self, baby_id: str) -> list[str]:
-        if data := self.repository.get_all_start_times(baby_id):
-            unique_dates = {item["start_time"][:10] for item in data if item.get("start_time")}
-            return sorted(list(unique_dates))
+            raise InvalidInputError("El payload de actualización está vacío.")
+        if "start_time" in update_dict and update_dict["start_time"] is None:
+            raise InvalidInputError("start_time no puede borrarse")
+        if "metadata" in update_dict and update_dict["metadata"] is None:
+            update_dict["metadata"] = {}
 
-        return []
-    
+        category = EventCategory(current["category"])
+        start = update_data.start_time if "start_time" in update_dict else parse_ts(current["start_time"])
+        end = update_data.end_time if "end_time" in update_dict else parse_ts(current.get("end_time"))
+        metadata = update_dict.get("metadata", current.get("metadata") or {})
+
+        validate_timing(category, start, end, metadata)
+        # Los metadatos solo se validan si se modifican: así se pueden seguir editando
+        # eventos antiguos (p. ej. importados del CSV) con formatos previos.
+        if "metadata" in update_dict:
+            validate_metadata(category, metadata)
+
+        updated = self.repository.update(current["id"], update_dict)
+        if not updated:
+            raise NotFoundError("El evento no existe")
+        return updated
+
+    def delete_event(self, event_id: str) -> dict:
+        deleted = self.repository.delete(event_id)
+        if not deleted:
+            raise NotFoundError("El evento no existe")
+        return deleted
+
+    # ─── Lectura ──────────────────────────────────────────────────────────────
+
+    def get_active_events(self, baby_id: str, category: Optional[EventCategory] = None) -> list[dict]:
+        """Eventos con cronómetro abierto. De las tomas, solo la lactancia tiene duración."""
+        events = self.repository.get_open_duration_events(baby_id, category.value if category else None)
+        return [
+            e for e in events
+            if e["category"] != EventCategory.FEED.value or (e.get("metadata") or {}).get("type") == "nursing"
+        ]
+
+    def get_valid_event_dates(self, baby_id: str) -> list[str]:
+        """Días (en hora local) con al menos un evento, para el calendario."""
+        dates = {
+            local_date(parse_ts(row["start_time"]), self.tz).isoformat()
+            for row in self.repository.get_all_start_times(baby_id)
+            if row.get("start_time")
+        }
+        return sorted(dates)
+
     def get_growth_history(self, baby_id: str) -> list[dict]:
         return self.repository.get_by_category(baby_id, EventCategory.GROWTH.value)
 
     def get_last_events_by_category(self, baby_id: str) -> Dict[str, Optional[str]]:
-        events_data = self.repository.get_recent_events(baby_id)
-        
-        last_events = {}
-        for event in events_data:
-            category = event['category']
-            start_time = event['start_time']
-            metadata = event.get('metadata') or {}
-            
-            if category == 'feed':
-                feed_type = metadata.get('type')
-                if feed_type in ['solids', 'bottle', 'nursing']:
-                    if feed_type not in last_events:
-                        last_events[feed_type] = start_time
-                elif 'feed' not in last_events:
-                    last_events['feed'] = start_time
-            elif category == 'diaper':
-                condition = metadata.get('condition')
-                if condition in ['wet', 'dirty']:
-                    key = f"diaper_{condition}"
-                    if key not in last_events:
-                        last_events[key] = start_time
-                if 'diaper' not in last_events:
-                    last_events['diaper'] = start_time
-            else:
-                if category not in last_events:
-                    last_events[category] = start_time
-                    
-        return last_events
+        recent = self.repository.get_latest(baby_id, limit=RECENT_WINDOW)
+        last = _collect_last(recent)
 
-    # --- Validadores de Estructura ---
+        # Las categorías poco frecuentes (medicina, temperatura, crecimiento...) pueden haber
+        # quedado fuera de la ventana de eventos recientes: se buscan aparte, en una sola query.
+        if len(recent) >= RECENT_WINDOW:
+            missing = [c for c in SIMPLE_CATEGORIES if c not in last]
+            if "diaper" not in last:
+                missing.append(EventCategory.DIAPER.value)
+            if not any(k in last for k in (*FEED_TYPES, "feed")):
+                missing.append(EventCategory.FEED.value)
+            if missing:
+                older = self.repository.get_latest(baby_id, limit=RECENT_WINDOW, categories=missing)
+                for key, value in _collect_last(older).items():
+                    last.setdefault(key, value)
+        return last
 
-    def _validate_event_timing(self, event: EventBase):
-        atomic_events = {
-            EventCategory.WOKE_UP, EventCategory.BED_TIME, EventCategory.BATH, 
-            EventCategory.DIAPER, EventCategory.MEDICINE, EventCategory.TEMPERATURE,
-            EventCategory.GROWTH, EventCategory.MILESTONE
-        }
-        
-        if event.category in atomic_events and event.end_time is not None:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"El evento '{event.category}' es atómico y no admite 'end_time'."
-            )
 
-        if event.category == EventCategory.FEED:
-            feed_type = event.metadata.get('type')
-            if feed_type != 'nursing' and event.end_time is not None:
-                raise HTTPException(
-                    status_code=400, 
-                    detail="Solo las tomas de tipo 'nursing' admiten 'end_time'."
-                )
+def _collect_last(events_desc: list[dict]) -> Dict[str, str]:
+    """Primera aparición de cada clave en una lista ordenada de más reciente a más antigua."""
+    last: Dict[str, str] = {}
+    for event in events_desc:
+        category = event["category"]
+        start_time = event["start_time"]
+        metadata = event.get("metadata") or {}
 
-    # --- Validadores de Metadatos (Payloads) ---
-
-    def _validate_growth_metadata(self, metadata: dict):
-        if not any(k in metadata for k in ('weight_kg', 'height_cm', 'head_cm')):
-            raise HTTPException(
-                status_code=400, 
-                detail="Growth requiere al menos un dato: 'weight_kg', 'height_cm' o 'head_cm'"
-            )
-
-    def _validate_pumping_metadata(self, metadata: dict):
-        if metadata and 'total_ml' not in metadata and 'notes' not in metadata:
-            raise HTTPException(
-                status_code=400, 
-                detail="Si se incluyen metadatos en Pumping, debe contener 'total_ml' o 'notes'"
-            )
-
-    def _validate_milestone_metadata(self, metadata: dict):
-        if 'title' not in metadata:
-            raise HTTPException(
-                status_code=400, 
-                detail="Milestone requiere un 'title' (ej: 'Primer diente')"
-            )
-
-    def _validate_feed_metadata(self, metadata: dict):
-        valid_types = ['bottle', 'nursing', 'solids']
-        if 'type' not in metadata or metadata['type'] not in valid_types:
-            raise HTTPException(status_code=400, detail=f"Feed debe tener type: {valid_types} \n {metadata}")
-
-    def _validate_diaper_metadata(self, metadata: dict):
-        valid_conditions = ['wet', 'dirty', 'mixed', 'clean']
-        if 'condition' not in metadata or metadata['condition'] not in valid_conditions:
-            raise HTTPException(status_code=400, detail=f"Diaper debe tener condition: {valid_conditions}")
-
-    def _validate_medicine_metadata(self, metadata: dict):
-        has_strict_fields = all(k in metadata for k in ('name', 'dose_amount', 'dose_unit'))
-        has_notes = 'notes' in metadata
-        
-        if not (has_strict_fields or has_notes):
-            raise HTTPException(status_code=400, detail="Medicine requiere: name, dose_amount y dose_unit (o al menos 'notes')")
-
-    def _validate_temperature_metadata(self, metadata: dict):
-        if 'celsius' not in metadata:
-            raise HTTPException(status_code=400, detail="Temperature requiere el campo 'celsius'")
+        if category == EventCategory.FEED.value:
+            feed_type = metadata.get("type")
+            last.setdefault(feed_type if feed_type in FEED_TYPES else "feed", start_time)
+        elif category == EventCategory.DIAPER.value:
+            last.setdefault("diaper", start_time)
+            condition = metadata.get("condition")
+            # Un pañal mixto es a la vez mojado y sucio
+            if condition in ("wet", "mixed"):
+                last.setdefault("diaper_wet", start_time)
+            if condition in ("dirty", "mixed"):
+                last.setdefault("diaper_dirty", start_time)
+        else:
+            last.setdefault(category, start_time)
+    return last

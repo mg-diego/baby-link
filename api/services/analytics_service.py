@@ -5,7 +5,6 @@ from models.analytics_models import DailySummary
 from models.event_models import EventCategory
 from repositories.analytics_repository import AnalyticsRepository
 
-LOCAL_TZ = "Europe/Madrid"
 MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
 # Unidades que entiende la app para formatear ejes y tooltips
@@ -102,19 +101,19 @@ def _date_axis(start: date, end: date) -> tuple[list[str], list[str]]:
     return [d.strftime('%Y-%m-%d') for d in days], [_fmt_day(d) for d in days]
 
 
-def _to_local(column: pd.Series) -> pd.Series:
-    return pd.to_datetime(column, format='ISO8601', utc=True, errors='coerce').dt.tz_convert(LOCAL_TZ)
+def _to_local(column: pd.Series, tz: str) -> pd.Series:
+    return pd.to_datetime(column, format='ISO8601', utc=True, errors='coerce').dt.tz_convert(tz)
 
 
-def _events_df(raw: list) -> pd.DataFrame:
+def _events_df(raw: list, tz: str) -> pd.DataFrame:
     df = pd.DataFrame(raw)
     if df.empty:
         return df
     for col in ('end_time', 'metadata'):
         if col not in df.columns:
             df[col] = None
-    df['start'] = _to_local(df['start_time'])
-    df['end'] = _to_local(df['end_time'])
+    df['start'] = _to_local(df['start_time'], tz)
+    df['end'] = _to_local(df['end_time'], tz)
     df['metadata'] = df['metadata'].apply(lambda m: m if isinstance(m, dict) else {})
     df = df.dropna(subset=['start']).sort_values('start').reset_index(drop=True)
     df['day'] = df['start'].dt.strftime('%Y-%m-%d')
@@ -145,6 +144,7 @@ def _by_hour_chart(chart_id: str, title: str, series_name: str, df: pd.DataFrame
 class AnalyticsService:
     def __init__(self, repository: AnalyticsRepository):
         self.repository = repository
+        self.tz = str(repository.tz)
 
     def get_events_by_date_range(self, baby_id: str, start_date: date, end_date: date) -> list:
         return self.repository.get_events_by_date_range(baby_id, start_date, end_date)
@@ -221,7 +221,7 @@ class AnalyticsService:
     # ─── Sueño: carga de datos ────────────────────────────────────────────────
 
     def _load_naps(self, baby_id: str, start: date, end: date) -> pd.DataFrame:
-        df = _events_df(self.repository.get_events_by_categories(baby_id, ["nap"], start, end))
+        df = _events_df(self.repository.get_events_by_categories(baby_id, ["nap"], start, end), self.tz)
         if df.empty:
             return df
         # Las siestas en curso (sin end_time) o con duraciones absurdas no cuentan
@@ -240,7 +240,7 @@ class AnalyticsService:
         raw = self.repository.get_events_by_categories(
             baby_id, ["bed_time", "woke_up", "night_waking"], start, end, extra_hours_after=18
         )
-        df = _events_df(raw)
+        df = _events_df(raw, self.tz)
         if df.empty:
             return pd.DataFrame(columns=night_cols), pd.DataFrame(columns=waking_cols)
 
@@ -432,7 +432,7 @@ class AnalyticsService:
     # ─── Alimentación ─────────────────────────────────────────────────────────
 
     def _load_feeds(self, baby_id: str, start: date, end: date) -> pd.DataFrame:
-        df = _events_df(self.repository.get_events_by_categories(baby_id, ["feed"], start, end))
+        df = _events_df(self.repository.get_events_by_categories(baby_id, ["feed"], start, end), self.tz)
         if df.empty:
             return df
 
@@ -607,7 +607,7 @@ class AnalyticsService:
         return 'other'
 
     def generate_diaper_stats(self, baby_id: str, start: date, end: date, only: str | None = None) -> dict:
-        df = _events_df(self.repository.get_events_by_categories(baby_id, ["diaper"], start, end))
+        df = _events_df(self.repository.get_events_by_categories(baby_id, ["diaper"], start, end), self.tz)
         if df.empty:
             return _empty()
 
@@ -670,7 +670,7 @@ class AnalyticsService:
     def generate_growth_stats(self, baby_id: str, end: date, metric: str) -> dict:
         """Las mediciones son esporádicas, así que se usa todo el histórico hasta end_date."""
         key, unit, suffix, decimals, title = self.GROWTH_METRICS[metric]
-        df = _events_df(self.repository.get_events_until(baby_id, "growth", end))
+        df = _events_df(self.repository.get_events_until(baby_id, "growth", end), self.tz)
         if df.empty:
             return _empty()
 

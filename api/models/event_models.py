@@ -1,6 +1,11 @@
+from datetime import datetime
 from enum import Enum
-from typing import Optional, Dict, Any
-from pydantic import BaseModel, Field
+from typing import Any, Dict, Optional
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from core.timeutils import UTC
+
 
 class EventCategory(str, Enum):
     WOKE_UP = "woke_up"
@@ -16,16 +21,43 @@ class EventCategory(str, Enum):
     PUMPING = "pumping"
     MILESTONE = "milestone"
 
+
+def _to_utc(value: Optional[datetime]) -> Optional[datetime]:
+    # Sin zona -> se asume UTC (es lo que envía la app con toUtc())
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
 class EventBase(BaseModel):
     baby_id: str
     category: EventCategory
-    start_time: str
-    end_time: Optional[str] = None
+    start_time: datetime
+    end_time: Optional[datetime] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
     notes: Optional[str] = None
 
+    @field_validator("start_time", "end_time")
+    @classmethod
+    def _normalize_times(cls, value):
+        return _to_utc(value)
+
+    @model_validator(mode="after")
+    def _check_order(self):
+        if self.end_time is not None and self.end_time < self.start_time:
+            raise ValueError("end_time no puede ser anterior a start_time")
+        return self
+
+
 class EventUpdate(BaseModel):
-    start_time: Optional[str] = None
-    end_time: Optional[str] = None
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
     metadata: Optional[Dict[str, Any]] = None
     notes: Optional[str] = None
+
+    @field_validator("start_time", "end_time")
+    @classmethod
+    def _normalize_times(cls, value):
+        return _to_utc(value)

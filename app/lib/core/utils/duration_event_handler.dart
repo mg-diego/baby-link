@@ -305,14 +305,7 @@ class DurationEventHandler {
         if (currentNapPrediction != null && currentNapPrediction.end != null) {
           metadata = {
             ...metadata,
-            'predicted_start_time': currentNapPrediction.start
-                .toUtc()
-                .toIso8601String(),
-            'predicted_end_time': currentNapPrediction.end!
-                .toUtc()
-                .toIso8601String(),
-            if (currentNapPrediction.index != null)
-              'nap_index': currentNapPrediction.index,
+            ...currentNapPrediction.toPredictionMetadata(),
           };
         }
       }

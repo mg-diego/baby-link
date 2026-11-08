@@ -1,11 +1,15 @@
 from datetime import date
 from typing import Optional
+
 from pydantic import BaseModel
+
 
 class BabyCreate(BaseModel):
     name: str
     dob: date
-    user_id: str
+    # Se ignora cuando la autenticación está activa: el dueño es siempre el usuario del token.
+    user_id: Optional[str] = None
+
 
 class BabyUpdate(BaseModel):
     name: Optional[str] = None

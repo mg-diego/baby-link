@@ -61,6 +61,28 @@ Crea `api/.env` (también ignorado por git):
 ```env
 SUPABASE_URL=https://<tu-proyecto>.supabase.co
 SUPABASE_KEY=<tu-service-role-key>
+
+# Opcionales
+SUPABASE_JWT_SECRET=<jwt-secret>   # solo si el proyecto usa la clave JWT legacy (HS256); valida los tokens sin llamar a Supabase
+AUTH_ENABLED=true                  # false solo durante la transición, mientras haya apps sin el token
+HOME_ASSISTANT_API_KEY=<clave>     # necesaria para /homeassistant/... (cabecera X-API-Key)
+APP_TIMEZONE=Europe/Madrid         # zona para "hoy", calendario, estadísticas y predicciones
+CORS_ORIGINS=*
+```
+
+### Autenticación
+
+Todas las rutas exigen `Authorization: Bearer <access token de Supabase>` (la app lo envía automáticamente) y solo dan acceso a los bebés del usuario del token. Los tokens con claves asimétricas (ES256/RS256) se validan en local contra el JWKS del proyecto; con la clave HS256 legacy hace falta `SUPABASE_JWT_SECRET` o, si no está, se consulta a Supabase Auth (con caché).
+
+Home Assistant usa una clave propia: añade `X-API-Key: <HOME_ASSISTANT_API_KEY>` a los `headers` del sensor REST.
+
+### Tests y backtesting
+
+```bash
+cd api
+pip install pytest
+python -m pytest
+python -m tools.backtest --baby-id <uuid>     # error del motor de predicciones sobre el historial real (solo lectura)
 ```
 
 Arranca el servidor (`--host 0.0.0.0` permite que un móvil físico lo alcance):

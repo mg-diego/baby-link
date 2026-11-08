@@ -1,9 +1,28 @@
 import 'dart:convert';
 import 'package:app/features/analytics/models/daily_summary.dart';
 import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants.dart';
 
 class ApiService {
+  /// Cabeceras comunes: la API exige el access token de Supabase del usuario.
+  static Future<Map<String, String>> _headers() async {
+    final headers = {'Content-Type': 'application/json'};
+    try {
+      final auth = Supabase.instance.client.auth;
+      var session = auth.currentSession;
+      if (session != null && session.isExpired) {
+        session = (await auth.refreshSession()).session;
+      }
+      final token = session?.accessToken;
+      if (token != null) headers['Authorization'] = 'Bearer $token';
+    } catch (_) {
+      // Supabase sin inicializar (tests) o sin red para refrescar: se envía sin
+      // token y la API responderá 401.
+    }
+    return headers;
+  }
+
   // BABIES
   static Future<String?> registerBaby(
     String name,
@@ -12,7 +31,7 @@ class ApiService {
   ) async {
     final response = await http.post(
       Uri.parse('${AppConstants.apiUrl}/babies'),
-      headers: {'Content-Type': 'application/json'},
+      headers: await _headers(),
       body: jsonEncode({'name': name, 'dob': dob, 'user_id': userId}),
     );
 
@@ -26,7 +45,7 @@ class ApiService {
   static Future<List<dynamic>> getBabies(String userId) async {
     final response = await http.get(
       Uri.parse('${AppConstants.apiUrl}/babies/$userId'),
-      headers: {'Content-Type': 'application/json'},
+      headers: await _headers(),
     );
 
     if (response.statusCode == 200) {
@@ -42,7 +61,7 @@ class ApiService {
   ) async {
     final response = await http.patch(
       Uri.parse('${AppConstants.apiUrl}/babies/$babyId'),
-      headers: {'Content-Type': 'application/json'},
+      headers: await _headers(),
       body: jsonEncode(updateData),
     );
 
@@ -61,7 +80,7 @@ class ApiService {
   }) async {
     final response = await http.post(
       Uri.parse('${AppConstants.apiUrl}/events/register'),
-      headers: {'Content-Type': 'application/json'},
+      headers: await _headers(),
       body: jsonEncode({
         'baby_id': babyId,
         'category': category,
@@ -87,7 +106,7 @@ class ApiService {
     try {
       final response = await http.get(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: await _headers(),
       );
 
       if (response.statusCode == 200) {
@@ -108,7 +127,7 @@ class ApiService {
     try {
       final response = await http.get(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: await _headers(),
       );
 
       if (response.statusCode != 200) {
@@ -135,7 +154,7 @@ class ApiService {
     try {
       final response = await http.get(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: await _headers(),
       );
 
       if (response.statusCode != 200) {
@@ -162,7 +181,7 @@ class ApiService {
   static Future<List<Map<String, dynamic>>> getGrowthHistory(String babyId) async {
     final response = await http.get(
       Uri.parse('${AppConstants.apiUrl}/events/growth/$babyId'),
-      headers: {'Content-Type': 'application/json'},
+      headers: await _headers(),
     );
 
     if (response.statusCode == 200) {
@@ -181,7 +200,7 @@ class ApiService {
     try {
       final response = await http.patch(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: await _headers(),
         body: jsonEncode(updateData),
       );
 
@@ -205,7 +224,7 @@ class ApiService {
     try {
       final response = await http.delete(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: await _headers(),
       );
 
       if (response.statusCode != 200 && response.statusCode != 204) {
@@ -230,7 +249,7 @@ class ApiService {
       Uri.parse(
         '${AppConstants.apiUrl}/analytics/$babyId/daily-summary?target_date=$dateStr',
       ),
-      headers: {'Content-Type': 'application/json'},
+      headers: await _headers(),
     );
 
     if (response.statusCode == 200) {
@@ -252,7 +271,7 @@ class ApiService {
       Uri.parse(
         '${AppConstants.apiUrl}/analytics/$babyId/events?start_date=$startStr&end_date=$endStr',
       ),
-      headers: {'Content-Type': 'application/json'},
+      headers: await _headers(),
     );
 
     if (response.statusCode == 200) {
@@ -265,12 +284,15 @@ class ApiService {
   static Future<List<dynamic>> getSleepPredictions(String babyId) async {
     final response = await http.get(
       Uri.parse('${AppConstants.apiUrl}/analytics/$babyId/sleep-prediction'),
-      headers: {'Content-Type': 'application/json'},
+      headers: await _headers(),
     );
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      return data is List ? data : data['data'];
+      if (data is List) return data;
+      // Con pocos datos la API devuelve status "insufficient_data" y data: []
+      final list = data['data'];
+      return list is List ? list : [];
     }
 
     return [];
@@ -279,12 +301,13 @@ class ApiService {
   static Future<Map<String, dynamic>?> getWakePrediction(String babyId) async {
     final response = await http.get(
       Uri.parse('${AppConstants.apiUrl}/analytics/$babyId/wake-prediction'),
-      headers: {'Content-Type': 'application/json'},
+      headers: await _headers(),
     );
 
     if (response.statusCode == 200) {
       final jsonResponse = jsonDecode(response.body);
-      return jsonResponse['data'];
+      final data = jsonResponse['data'];
+      return data is Map<String, dynamic> ? data : null;
     }
 
     return null;
@@ -318,7 +341,7 @@ class ApiService {
     // en lugar de un "Sin datos" engañoso.
     final response = await http.get(
       uri,
-      headers: {'Content-Type': 'application/json'},
+      headers: await _headers(),
     );
 
     if (response.statusCode != 200) {

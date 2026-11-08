@@ -32,12 +32,18 @@ class SleepPrediction {
   final DateTime? end;
   final String? note;
 
+  /// Bloque opaco que devuelve la API (corrección aplicada, siesta corta,
+  /// retrasada...). Se guarda tal cual en el evento real para que el backend
+  /// pueda medir el error de sus predicciones.
+  final Map<String, dynamic>? feedback;
+
   const SleepPrediction({
     required this.type,
     this.index,
     required this.start,
     this.end,
     this.note,
+    this.feedback,
   });
 
   bool get isNap => type == 'nap';
@@ -58,8 +64,20 @@ class SleepPrediction {
       start: parseUtc(json['start'] as String),
       end: json['end'] != null ? parseUtc(json['end'] as String) : null,
       note: json['note'] as String?,
+      feedback: json['predicted_feedback'] is Map
+          ? Map<String, dynamic>.from(json['predicted_feedback'] as Map)
+          : null,
     );
   }
+
+  /// Metadatos `predicted_*` que se guardan al registrar el evento real.
+  /// (El formulario de edición conserva las claves `predicted_*` y `nap_index`.)
+  Map<String, dynamic> toPredictionMetadata() => {
+    'predicted_start_time': start.toUtc().toIso8601String(),
+    if (end != null) 'predicted_end_time': end!.toUtc().toIso8601String(),
+    if (index != null) 'nap_index': index,
+    if (feedback != null) 'predicted_feedback': feedback,
+  };
 
   Map<String, dynamic> toJson() => {
     'category': type,

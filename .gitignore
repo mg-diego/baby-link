@@ -121,3 +121,7 @@ api/.env
 export.csv
 migrar_csv.py
 settings.json
+
+# Python
+.pytest_cache/
+__pycache__/

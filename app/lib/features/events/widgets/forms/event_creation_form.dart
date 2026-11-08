@@ -70,16 +70,13 @@ class _EventCreationSheetState extends ConsumerState<EventCreationSheet> {
       final bedTimePrediction = predictions?.where((p) => p.isBedtime).firstOrNull;
 
       if (bedTimePrediction != null) {
-        finalMeta['predicted_start_time'] = bedTimePrediction.start.toUtc().toIso8601String();
-        if (bedTimePrediction.end != null) {
-          finalMeta['predicted_end_time'] = bedTimePrediction.end!.toUtc().toIso8601String();
-        }
+        finalMeta.addAll(bedTimePrediction.toPredictionMetadata());
       }
     } else if (widget.eventType == EventType.wokeUp) {
       final wakePrediction = ref.read(wakePredictionProvider(widget.babyId)).asData?.value;
 
       if (wakePrediction != null) {
-        finalMeta['predicted_start_time'] = wakePrediction.start.toUtc().toIso8601String();
+        finalMeta.addAll(wakePrediction.toPredictionMetadata());
       }
     }
 
