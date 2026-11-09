@@ -42,6 +42,8 @@ class EventFormFactory {
       case EventType.nap:
       case EventType.nightWaking:
       case EventType.pumping:
+      // No tiene formulario: se marca desde la predicción y solo se deshace.
+      case EventType.napSkipped:
         return null;
 
       case EventType.wokeUp:

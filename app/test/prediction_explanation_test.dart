@@ -75,6 +75,14 @@ void main() {
       expect(e.subtitle, 'Ya es la hora');
       expect(texts(e).last, contains('sin una siesta corta la noche llegaría demasiado pronto'));
     });
+
+    test('siesta sin registrar cuyo hueco ya pasó (guardería)', () {
+      final p = pred({...firstNap, 'assumed': true, 'overdue': false});
+      expect(p.assumed, isTrue);
+      final e = PredictionExplanation.of(p, now: DateTime(2026, 11, 10, 15));
+      expect(e.subtitle, 'Sin registrar · se cuenta como hecha a su hora');
+      expect(pred(firstNap).assumed, isFalse); // respuestas antiguas sin el campo
+    });
   });
 
   test('hora de dormir: cada criterio con su peso', () {

@@ -150,6 +150,63 @@ def test_nothing_is_predicted_in_the_past():
     assert all(parse_ts(i["start"]) >= now for i in out.schedule)
 
 
+def test_unlogged_nap_whose_slot_passed_is_assumed():
+    """Guardería: no se sabe cuándo durmió. La siesta cuyo hueco ya pasó no desaparece:
+    se queda en su sitio (sin "retrasada") y el resto del día cuenta con ella."""
+    now = local(TODAY, 13)
+    out = run(HISTORY + [event("woke_up", local(TODAY, 7))], now)
+    first, second = naps(out)
+    assert first["assumed"] is True and first["overdue"] is False
+    assert abs(minutes(local(TODAY, 9, 30), parse_ts(first["start"]))) <= 2
+    assert second["assumed"] is False and parse_ts(second["start"]) > now
+    assert abs(minutes(local(TODAY, 19), bedtime(out))) <= 10
+
+
+def test_all_unlogged_naps_keep_bedtime():
+    # Por la tarde sin ninguna siesta registrada: la hora de dormir no se adelanta
+    now = local(TODAY, 16)
+    out = run(HISTORY + [event("woke_up", local(TODAY, 7))], now)
+    assert [n["assumed"] for n in naps(out)] == [True, True]
+    assert abs(minutes(local(TODAY, 19), bedtime(out))) <= 10
+    assert not any(parse_ts(n["start_range"]["earliest"]) == now for n in naps(out))
+
+
+# ─── Siestas marcadas como no hechas ──────────────────────────────────────────
+
+def test_skipped_nap_moves_to_the_next_one():
+    # La de las 9:30 no la hizo: la siguiente es la 2ª, contada desde las 9:30 y no "supuesta"
+    now = local(TODAY, 10, 30)
+    rows = HISTORY + [event("woke_up", local(TODAY, 7)), event("nap_skipped", local(TODAY, 9, 30))]
+    out = run(rows, now)
+    first = naps(out)[0]
+    assert first["index"] == 2 and first["assumed"] is False and parse_ts(first["start"]) > now
+    assert first["basis"]["from"] == "skipped"
+    assert parse_ts(first["basis"]["from_time"]) == local(TODAY, 9, 30)
+
+
+def test_skipped_naps_do_not_count_as_sleep():
+    # Por la tarde: con las dos marcadas como no hechas no se supone ninguna y se acuesta antes
+    now = local(TODAY, 16)
+    base = HISTORY + [event("woke_up", local(TODAY, 7))]
+    assumed = run(base, now)
+    skipped = run(base + [event("nap_skipped", local(TODAY, 9, 30)), event("nap_skipped", local(TODAY, 14))], now)
+    assert all(n["assumed"] for n in naps(assumed))
+    assert not any(n.get("assumed") for n in naps(skipped))
+    assert bedtime(skipped) < bedtime(assumed)
+
+
+def test_skipped_rescue_nap_is_not_proposed_again():
+    base = HISTORY + [event("woke_up", local(TODAY, 7)), event("nap", local(TODAY, 9, 30), local(TODAY, 10, 0)),
+                      event("nap", local(TODAY, 12, 30), local(TODAY, 13, 0))]
+    out = run(base + [event("nap_skipped", local(TODAY, 15))], local(TODAY, 15, 5))
+    assert naps(out) == []
+
+
+def test_skip_without_an_open_day_is_ignored():
+    rows = HISTORY + [event("nap_skipped", local(TODAY, 3))]
+    assert segment_days(parse_events(rows), DEFAULT_CONFIG) == segment_days(parse_events(HISTORY), DEFAULT_CONFIG)
+
+
 def test_nap_longer_than_expected():
     now = local(TODAY, 11, 30)  # la siesta de las 9:30 va por 2 h (lo normal: 1h30)
     out = run(HISTORY + [event("woke_up", local(TODAY, 7)), event("nap", local(TODAY, 9, 30))], now)

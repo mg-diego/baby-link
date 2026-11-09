@@ -112,6 +112,13 @@ def test_atomic_event_cannot_have_end_time(client):
     assert response.status_code == 400
 
 
+def test_skipped_nap_is_an_atomic_event(client):
+    skip = {"category": "nap_skipped", "start_time": "2026-03-01T09:30:00Z", "metadata": {"nap_index": 1}}
+    assert client.post("/babies/baby-a/events", headers=auth(), json=skip).status_code == 200
+    response = client.post("/babies/baby-a/events", headers=auth(), json={**skip, "end_time": "2026-03-01T10:00:00Z"})
+    assert response.status_code == 400
+
+
 def test_invalid_start_time_is_422_not_500(client):
     assert client.post("/babies/baby-a/events", headers=auth(), json={**NAP, "start_time": "ayer"}).status_code == 422
 

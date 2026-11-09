@@ -101,7 +101,10 @@ class DynamicClockMessage extends StatelessWidget {
         final awakeM = awakeDiff.inMinutes % 60;
 
         SleepPrediction? nextSleep;
-        final naps = VisualClockLogic.getNapPredictions(sleepPrediction, events);
+        // Las siestas supuestas (hueco pasado sin registrar) ya no son "la próxima"
+        final naps = VisualClockLogic.getNapPredictions(sleepPrediction, events)
+            .where((p) => !p.assumed)
+            .toList();
         
         if (naps.isNotEmpty) {
           nextSleep = naps.first;
@@ -238,7 +241,7 @@ class DynamicClockMessage extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10 * scale),
               ),
               child: Text(
-                bottomPillText!,
+                bottomPillText,
                 style: TextStyle(
                   color: pillTextColor,
                   fontSize: 12 * scale,

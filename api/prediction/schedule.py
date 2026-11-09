@@ -32,7 +32,7 @@ def _profile_basis(profile: SleepProfile) -> dict:
 
 
 def _nap_item(index, start, raw_start, minutes, start_bias, duration_bias, catnap, overdue, start_range,
-              basis) -> dict:
+              basis, assumed: bool = False) -> dict:
     return {
         "type": "nap",
         "index": index,
@@ -42,6 +42,8 @@ def _nap_item(index, start, raw_start, minutes, start_bias, duration_bias, catna
         "start_range": start_range,
         "is_catnap": catnap,
         "overdue": overdue,
+        # Ya pasó sin registrarse: se supone hecha a su hora (no es "la próxima siesta")
+        "assumed": assumed,
         "basis": basis,
         FEEDBACK_KEY: {
             # Predicción sin recortar a "ahora": el error se mide contra ella aunque vaya con
@@ -67,6 +69,7 @@ def plan_day(
     tz: ZoneInfo,
     cfg: PredictionConfig,
     anchor_var: float = 0.0,
+    anchor_skipped: bool = False,
 ) -> tuple[list[dict], datetime, float]:
     """Agenda desde `anchor` (último despertar real o previsto) hasta la hora de dormir.
 
@@ -75,6 +78,7 @@ def plan_day(
     - `deficit_min`: minutos de siesta que faltan respecto a lo esperado en las siestas ya
       hechas; si el bebé lo compensa, se acortan las ventanas que quedan.
     - `anchor_var`: incertidumbre (min²) de `anchor` si es previsto y no real.
+    - `anchor_skipped`: `anchor` es la hora de una siesta marcada como no hecha.
     Devuelve los items, la hora de dormir prevista y su varianza (min²).
     """
     target_bed = wake + _td(profile.day_minutes)
@@ -94,8 +98,10 @@ def plan_day(
     common = _profile_basis(profile)
 
     def from_basis() -> dict:
-        """Desde qué se cuenta: el despertar o el fin de la siesta anterior, real o previsto."""
-        return {"from": "wake" if index == 1 else "nap", "from_time": to_iso_z(cursor),
+        """Desde qué se cuenta: el despertar, el fin de la siesta anterior (real o previsto)
+        o la hora de una siesta que no hizo."""
+        kind = "skipped" if anchor_skipped and not items else ("wake" if index == 1 else "nap")
+        return {"from": kind, "from_time": to_iso_z(cursor),
                 "from_predicted": bool(items) or anchor_var > 0}
 
     while index <= nap_count and len(items) < cfg.max_items - 1:
@@ -103,15 +109,23 @@ def plan_day(
         start_bias = biases.ww_first if first else biases.ww_mid
         raw_start = cursor + _td(window(index))
         start_var = var + (sd_first if first else sd_mid) ** 2
-        overdue = raw_start < now
-        start = max(raw_start, now)
-
         duration = max(profile.nap_duration(index) + biases.nap_duration, 10.0)
         duration_bias, catnap = biases.nap_duration, False
-        if start + _td(duration + ww_evening) > late_limit:
-            # No cabe una siesta normal sin retrasar demasiado la noche: siesta corta o nada
+
+        # Su hueco entero ya pasó sin registrarse (p. ej. en la guardería, donde no se sabe
+        # cuándo durmió): se supone que la hizo a su hora. Se queda en su sitio y el resto
+        # del día se planifica contando con ella, en vez de darla por perdida.
+        assumed = raw_start + _td(duration) < now
+        overdue = raw_start < now and not assumed
+        start = raw_start if assumed else max(raw_start, now)
+
+        if not assumed and start + _td(duration + ww_evening) > late_limit:
+            # No cabe una siesta normal sin retrasar demasiado la noche: siesta corta, o si
+            # ya debería haber empezado, se deja en su hueco como las anteriores
             if not first and start + _td(cfg.catnap_min + ww_evening) <= late_limit:
                 duration, duration_bias, catnap = cfg.catnap_min, 0.0, True
+            elif overdue:
+                assumed, overdue, start = True, False, raw_start
             else:
                 break
 
@@ -122,7 +136,8 @@ def plan_day(
                  "duration_min": round(duration), "usual_duration_min": round(profile.nap_duration(index)),
                  "nap_count": nap_count, "rescue": False, "correction_min": round(start_bias)}
         items.append(_nap_item(index, start, raw_start, duration, start_bias, duration_bias, catnap, overdue,
-                               _range(raw_start, start_var, now, cfg), basis))
+                               _range(raw_start, start_var, None if assumed else now, cfg), basis,
+                               assumed=assumed))
         cursor = start + _td(duration)
         var = start_var + (sd_nap * (0.5 if catnap else 1.0)) ** 2
         index += 1
@@ -132,7 +147,8 @@ def plan_day(
 
     # Siestas muy cortas hoy: la noche llegaría demasiado pronto -> una siesta extra corta
     rescue_margin = 150 if nap_count <= 2 else 80
-    if nap_count >= 1 and index > nap_count and pure_bed < target_bed - _td(rescue_margin) \
+    # Como mucho una: si se marca como no hecha, no se propone otra
+    if nap_count >= 1 and index == nap_count + 1 and pure_bed < target_bed - _td(rescue_margin) \
             and len(items) < cfg.max_items - 1:
         rescue_window = window(index) * 0.85
         raw_start = cursor + _td(rescue_window)

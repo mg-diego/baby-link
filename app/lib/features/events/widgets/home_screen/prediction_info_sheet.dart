@@ -9,7 +9,10 @@ import 'prediction_explanation.dart';
 class PredictionInfoSheet extends StatelessWidget {
   final SleepPrediction prediction;
 
-  const PredictionInfoSheet({super.key, required this.prediction});
+  /// Si se indica, se ofrece marcar la siesta como no hecha.
+  final VoidCallback? onSkip;
+
+  const PredictionInfoSheet({super.key, required this.prediction, this.onSkip});
 
   EventType get _eventType => switch (prediction.type) {
         'nap' => EventType.nap,
@@ -110,6 +113,24 @@ class PredictionInfoSheet extends StatelessWidget {
                   Text(info.footer!, style: TextStyle(fontSize: 12, color: muted, height: 1.4)),
                 ],
                 const SizedBox(height: 20),
+                if (onSkip != null) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        onSkip!();
+                      },
+                      icon: const Icon(Icons.do_not_disturb_on_outlined),
+                      label: const Text('No ha hecho esta siesta'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 SizedBox(
                   width: double.infinity,
                   child: TextButton(

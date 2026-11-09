@@ -47,7 +47,7 @@ class _BedtimeFormState extends State<BedtimeForm> {
           onTimeChanged: (newTime) => setState(() => _time = newTime),
         ),
         DropdownButtonFormField<String>(
-          value: _how,
+          initialValue: _how,
           decoration: const InputDecoration(labelText: 'Cómo se durmió', border: OutlineInputBorder()),
           items: ['En la cama', 'Lactancia', 'Sostenido', 'A mi lado', 'Biberón', 'Carrito', 'Automóvil']
               .map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),

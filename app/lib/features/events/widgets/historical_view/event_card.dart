@@ -68,8 +68,9 @@ class _EventCardState extends State<EventCard> with SingleTickerProviderStateMix
     if (meta['milk_type'] != null) details.add(meta['milk_type']);
     if (meta['amount_ml'] != null) details.add('${meta['amount_ml']} ml');
     if (meta['amount']?.toString().isNotEmpty == true) details.add(meta['amount'].toString());
-    if (meta['ui_condition'] != null) details.add(meta['ui_condition']);
-    else if (meta['condition'] != null) details.add(meta['condition']);
+    if (meta['ui_condition'] != null) {
+      details.add(meta['ui_condition']);
+    } else if (meta['condition'] != null) details.add(meta['condition']);
     if (meta['celsius'] != null) details.add('${meta['celsius']}°C');
     if (meta['how'] != null) details.add(meta['how']);
     if (meta['mood'] != null) details.add(meta['mood']);
@@ -254,7 +255,7 @@ class OngoingBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: anim,
-      builder: (_, __) => Container(
+      builder: (_, _) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
           color: color.withOpacity(0.1 + 0.1 * anim.value),

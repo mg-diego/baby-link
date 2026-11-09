@@ -29,7 +29,10 @@ class VisualClockLogic {
   static List<SleepPrediction> getNapPredictions(
       List<SleepPrediction>? predictions, List<Map<String, dynamic>> events) {
     final preds = predictions?.where((p) => p.isNap && p.end != null).toList() ?? [];
-    final realNapsCount = events.where((e) => e['category'] == 'nap').length;
+    // Las siestas marcadas como no hechas también ocupan su turno del día
+    final realNapsCount = events
+        .where((e) => e['category'] == 'nap' || e['category'] == 'nap_skipped')
+        .length;
 
     return preds.where((p) {
       if (p.index != null) {

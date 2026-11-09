@@ -218,7 +218,7 @@ class EventGridButton extends StatelessWidget {
                           child: CircularProgressIndicator(strokeWidth: 1),
                         ),
                       ),
-                      error: (_, __) => Text(
+                      error: (_, _) => Text(
                         '--',
                         style: TextStyle(
                           fontSize: 9,
@@ -274,7 +274,7 @@ class _PulseDotState extends State<_PulseDot>
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _anim,
-      builder: (_, __) => Container(
+      builder: (_, _) => Container(
         width: 10,
         height: 10,
         decoration: BoxDecoration(

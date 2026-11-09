@@ -26,7 +26,9 @@ const _kFrames = [
 
 List<Color> _interpolateSky(double hour) {
   int i = 0;
-  while (i < _kFrames.length - 2 && _kFrames[i + 1].hour <= hour) i++;
+  while (i < _kFrames.length - 2 && _kFrames[i + 1].hour <= hour) {
+    i++;
+  }
   final a = _kFrames[i];
   final b = _kFrames[i + 1];
   final t = ((hour - a.hour) / (b.hour - a.hour)).clamp(0.0, 1.0);
@@ -126,7 +128,7 @@ class _DaySkyBackgroundState extends State<DaySkyBackground>
       ),
       child: AnimatedBuilder(
         animation: _driftController,
-        builder: (_, __) => CustomPaint(
+        builder: (_, _) => CustomPaint(
           painter: _DaySkyPainter(
             clouds: _clouds,
             drift: _driftController.value,

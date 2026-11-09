@@ -49,7 +49,7 @@ class WakeUpFormState extends State<WakeUpForm> {
           onTimeChanged: (newTime) => setState(() => _time = newTime),
         ),
         DropdownButtonFormField<String>(
-          value: _mood,
+          initialValue: _mood,
           decoration: const InputDecoration(
             labelText: 'Estado de ánimo',
             border: OutlineInputBorder(),
@@ -63,7 +63,7 @@ class WakeUpFormState extends State<WakeUpForm> {
         ),
         const SizedBox(height: 15),
         DropdownButtonFormField<String>(
-          value: _ended,
+          initialValue: _ended,
           decoration: const InputDecoration(
             labelText: 'Fin del sueño',
             border: OutlineInputBorder(),

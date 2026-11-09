@@ -63,6 +63,8 @@ class PredictionItem(_Row):
     index: Optional[int] = None
     note: Optional[str] = None
     overdue: Optional[bool] = None
+    # Siesta cuyo hueco ya pasó sin registrarse: se supone hecha a su hora
+    assumed: Optional[bool] = None
     is_catnap: Optional[bool] = None
     # Bloque opaco que la app guarda en el evento real (ver prediction/feedback.py)
     predicted_feedback: Optional[dict[str, Any]] = None

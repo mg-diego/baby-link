@@ -72,8 +72,9 @@ class EventLoggerSheet extends ConsumerWidget {
       if (type != EventType.nap &&
           type != EventType.nightWaking &&
           type != EventType.nursing &&
-          type != EventType.pumping)
+          type != EventType.pumping) {
         return false;
+      }
       return todayEvents.any((e) {
         final cat = e['category'];
         final meta = (e['metadata'] as Map<String, dynamic>?) ?? {};
@@ -109,7 +110,7 @@ class EventLoggerSheet extends ConsumerWidget {
     };
 
     final Map<String, List<EventType>> groupedEvents = {};
-    for (var event in EventType.values) {
+    for (var event in EventType.values.where((e) => e.isLoggable)) {
       groupedEvents.putIfAbsent(event.uiGroup, () => []).add(event);
     }
 
@@ -152,8 +153,9 @@ class EventLoggerSheet extends ConsumerWidget {
               ),
               children: orderedGroups.map((groupKey) {
                 final events = groupedEvents[groupKey];
-                if (events == null || events.isEmpty)
+                if (events == null || events.isEmpty) {
                   return const SizedBox.shrink();
+                }
 
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 16),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:app/features/events/services/event_action_service.dart';
+import 'package:app/features/events/views/nap_skip_actions.dart';
 import 'package:app/features/events/widgets/forms/event_edit_form.dart';
 
 /// Punto de entrada único para editar (o detener) un evento existente.
@@ -15,6 +16,12 @@ void launchEventEdit(
   Map<String, dynamic> event, {
   bool stopNow = false,
 }) {
+  // Una siesta marcada como no hecha no se edita: solo se puede deshacer.
+  if (event['category'] == skippedNapCategory) {
+    showSkippedNapSheet(context, ref, babyId, event);
+    return;
+  }
+
   // Contexto estable de la pantalla que abre el sheet: el del sheet deja de
   // ser válido en cuanto se cierra, y los SnackBar se muestran después.
   final messenger = ScaffoldMessenger.of(context);

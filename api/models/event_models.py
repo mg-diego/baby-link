@@ -10,6 +10,8 @@ from core.timeutils import UTC
 class EventCategory(str, Enum):
     WOKE_UP = "woke_up"
     NAP = "nap"
+    # Siesta prevista que no hizo (marcada a mano). Borrarla deshace la marca.
+    NAP_SKIPPED = "nap_skipped"
     BED_TIME = "bed_time"
     NIGHT_WAKING = "night_waking"
     FEED = "feed"

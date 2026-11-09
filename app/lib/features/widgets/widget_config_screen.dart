@@ -113,7 +113,7 @@ class _WidgetConfigScreenState extends State<WidgetConfigScreen> {
           children: [
             // 1. Selector Principal de Categoría
             DropdownButtonFormField<String>(
-              value: _selectedCategory,
+              initialValue: _selectedCategory,
               decoration: const InputDecoration(labelText: 'Tipo de Evento'),
               items: _categories.entries.map((e) {
                 return DropdownMenuItem(value: e.key, child: Text(e.value));

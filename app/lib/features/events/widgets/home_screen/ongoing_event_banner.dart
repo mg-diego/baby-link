@@ -141,8 +141,8 @@ class OngoingEventBanner extends StatelessWidget {
                       final now = DateTime.now();
                       final elapsed = now.difference(startTime).inMinutes;
 
-                      final pStart = DateTime.parse(predictedStartStr!).toLocal();
-                      final pEnd = DateTime.parse(predictedEndStr!).toLocal();
+                      final pStart = DateTime.parse(predictedStartStr).toLocal();
+                      final pEnd = DateTime.parse(predictedEndStr).toLocal();
 
                       final totalRaw = pEnd.difference(pStart).inMinutes.toDouble();
                       final total = totalRaw > 0 ? totalRaw : 1.0;

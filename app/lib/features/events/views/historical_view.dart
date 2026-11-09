@@ -60,22 +60,23 @@ class _HistoricalViewState extends ConsumerState<HistoricalView>
       years--;
       months += 12;
     }
-    String _y(int n) => n == 1 ? '1 año' : '$n años';
-    String _m(int n) => n == 1 ? '1 mes' : '$n meses';
-    String _d(int n) => n == 1 ? '1 día' : '$n días';
+    String y(int n) => n == 1 ? '1 año' : '$n años';
+    String m(int n) => n == 1 ? '1 mes' : '$n meses';
+    String d(int n) => n == 1 ? '1 día' : '$n días';
 
     if (years > 0) {
-      if (months > 0 && days > 0)
-        return '${_y(years)}, ${_m(months)}, ${_d(days)}';
-      if (months > 0) return '${_y(years)}, ${_m(months)}';
-      if (days > 0) return '${_y(years)}, ${_d(days)}';
-      return _y(years);
+      if (months > 0 && days > 0) {
+        return '${y(years)}, ${m(months)}, ${d(days)}';
+      }
+      if (months > 0) return '${y(years)}, ${m(months)}';
+      if (days > 0) return '${y(years)}, ${d(days)}';
+      return y(years);
     }
     if (months > 0) {
-      if (days > 0) return '${_m(months)}, ${_d(days)}';
-      return _m(months);
+      if (days > 0) return '${m(months)}, ${d(days)}';
+      return m(months);
     }
-    return _d(days);
+    return d(days);
   }
 
   @override

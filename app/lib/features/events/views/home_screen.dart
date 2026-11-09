@@ -6,6 +6,7 @@ import 'package:app/shared/models/event_type.dart';
 import 'package:app/features/events/services/event_action_service.dart';
 import 'package:app/features/events/views/event_edit_launcher.dart';
 import 'package:app/features/events/views/event_form_launcher.dart';
+import 'package:app/features/events/views/nap_skip_actions.dart';
 import 'package:app/features/events/widgets/home_screen/biological_cycle_view.dart';
 import 'package:app/features/events/providers/events_provider.dart';
 import 'package:app/features/notifications/sleep_alert_service.dart';
@@ -48,11 +49,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   void _showPredictionInfo(SleepPrediction prediction) {
+    final schedule = ref.read(sleepPredictionProvider(widget.babyId)).asData?.value ?? const [];
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => PredictionInfoSheet(prediction: prediction),
+      builder: (ctx) => PredictionInfoSheet(
+        prediction: prediction,
+        onSkip: canSkipNap(prediction, schedule, DateTime.now())
+            ? () => skipPredictedNap(context, ref, widget.babyId, prediction)
+            : null,
+      ),
     );
   }
 

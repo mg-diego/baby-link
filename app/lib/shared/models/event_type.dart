@@ -18,6 +18,13 @@ enum EventType {
     Icons.nights_stay_rounded, null,
     Color(0xFFF9A475),
   ),
+  // Siesta prevista que se marcó como no hecha. No se registra desde el "+":
+  // se marca desde la predicción y se deshace borrándola.
+  napSkipped(
+    'Siesta no hecha', 'nap_skipped', 'sleep',
+    null, null,
+    Color(0xFFA8A8C8),
+  ),
   nightWaking(
     'Despertar nocturno', 'night_waking', 'sleep',
     Icons.thunderstorm, null,
@@ -107,8 +114,14 @@ enum EventType {
     else if(this == EventType.bedtime) {
       return MdiIcons.sleep;
     }
+    else if(this == EventType.napSkipped) {
+      return MdiIcons.sleepOff;
+    }
     return _nativeIcon ?? Icons.help_outline; 
   }
+
+  /// Se puede registrar a mano desde la lista del botón "+".
+  bool get isLoggable => this != EventType.napSkipped;
 
   Color getAccentColor(BuildContext context, {bool? forceNightMode}) {
     final isNight = forceNightMode ?? Theme.of(context).brightness == Brightness.dark;

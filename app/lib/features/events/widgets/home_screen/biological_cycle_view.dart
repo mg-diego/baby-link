@@ -11,6 +11,7 @@ import 'package:app/features/events/widgets/visual_clock/visual_clock_view.dart'
 import 'day_sky_background.dart';
 import 'night_sky_background.dart';
 import 'home_header.dart';
+import 'sleep_alert_button.dart';
 import 'biological_action_bar.dart';
 import 'ongoing_event_banner.dart';
 
@@ -193,8 +194,8 @@ class BiologicalCycleView extends ConsumerWidget {
       String? isoString;
 
       if (type == EventType.diaper) {
-        final wet = eventsMap['diaper_wet'] as String?;
-        final dirty = eventsMap['diaper_dirty'] as String?;
+        final wet = eventsMap['diaper_wet'];
+        final dirty = eventsMap['diaper_dirty'];
         final wetDate = wet != null ? DateTime.tryParse(wet) : null;
         final dirtyDate = dirty != null ? DateTime.tryParse(dirty) : null;
 
@@ -218,7 +219,7 @@ class BiologicalCycleView extends ConsumerWidget {
           default:
             key = type.backendCategory;
         }
-        isoString = eventsMap[key] as String?;
+        isoString = eventsMap[key];
       }
 
       return isoString == null ? null : DateTime.tryParse(isoString)?.toLocal();
@@ -237,19 +238,37 @@ class BiologicalCycleView extends ConsumerWidget {
                     horizontal: size.width * 0.05,
                     vertical: size.height * 0.02,
                   ),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: HomeHeader(
-                      name: babyName,
-                      age: babyAge,
-                      photoUrl: babyPhotoUrl,
-                      isNightMode: isNightMode,
-                      dayTextPrimary: _dayTextPrimary(),
-                      dayTextSecondary: _dayTextSecondary(),
-                      dayTextShadow: _dayTextShadow(),
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const BabyInfoScreen()),
-                      ),
+                  // IntrinsicHeight + stretch: el botón de avisos toma la
+                  // misma altura que la tarjeta del bebé.
+                  child: IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Flexible(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: HomeHeader(
+                              name: babyName,
+                              age: babyAge,
+                              photoUrl: babyPhotoUrl,
+                              isNightMode: isNightMode,
+                              dayTextPrimary: _dayTextPrimary(),
+                              dayTextSecondary: _dayTextSecondary(),
+                              dayTextShadow: _dayTextShadow(),
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const BabyInfoScreen()),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        SleepAlertButton(
+                          babyId: babyId,
+                          isNightMode: isNightMode,
+                          dayTextPrimary: _dayTextPrimary(),
+                          dayTextSecondary: _dayTextSecondary(),
+                        ),
+                      ],
                     ),
                   ),
                 ),

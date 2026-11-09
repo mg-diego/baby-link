@@ -94,12 +94,20 @@ def _plan_open_day(day: SleepDay, profile: SleepProfile, biases: Biases, now: da
             anchor = max(expected_end, now)  # si ya dura más de lo previsto, se despertará a partir de ahora
         anchor_var = profile.sd("nap") ** 2 if anchor == expected_end else (profile.sd("nap") / 2) ** 2
     else:
-        anchor = max([n.end for n in closed], default=wake)
+        # Una siesta marcada como no hecha cuenta como terminada a su hora prevista: la
+        # siguiente se cuenta desde ahí (no desde el despertar, que la pondría en el pasado)
+        anchor = max([n.end for n in closed] + day.skipped, default=wake)
+    anchor_skipped = ongoing is None and bool(day.skipped) and anchor in day.skipped
 
     # Solo cuentan las siestas terminadas: la que está en curso aún no tiene déficit.
     # Una siesta extra (de rescate) no se esperaba: suma sueño, no déficit.
     deficit = sum(profile.expected_nap(n.index) - n.minutes for n in closed)
-    return plan_day(wake, anchor, len(naps) + 1, deficit, profile, biases, now, tz, cfg, anchor_var=anchor_var)
+    # Las marcadas como no hechas ocupan su turno (la siguiente prevista es la de después) y
+    # su sueño esperado entero es déficit.
+    skipped = len(day.skipped)
+    deficit += sum(profile.expected_nap(len(naps) + k) for k in range(1, skipped + 1))
+    return plan_day(wake, anchor, len(naps) + skipped + 1, deficit, profile, biases, now, tz, cfg,
+                    anchor_var=anchor_var, anchor_skipped=anchor_skipped)
 
 
 def _plan_without_recent_data(profile_for, biases: Biases, now: datetime, tz: ZoneInfo, cfg: PredictionConfig):

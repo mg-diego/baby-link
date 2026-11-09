@@ -72,6 +72,7 @@ class PredictionExplanation {
   }
 
   static String? _subtitle(SleepPrediction p, DateTime now) {
+    if (p.assumed) return 'Sin registrar · se cuenta como hecha a su hora';
     if (p.overdue || !p.start.isAfter(now)) {
       return p.isWakeUp ? 'Ya debería estar despierto' : 'Ya es la hora';
     }
@@ -143,7 +144,11 @@ class PredictionExplanation {
     final window = _int(b['usual_window_min']);
     final byWindow = _time(b['by_window']);
     if (window != null && windowW >= minWeight) {
-      final since = b['from'] == 'wake' ? 'Desde que se despierta' : 'Después de la última siesta';
+      final since = switch (b['from']) {
+        'wake' => 'Desde que se despierta',
+        'skipped' => 'Desde la siesta que no hizo',
+        _ => 'Después de la última siesta',
+      };
       final result = mixed && byWindow != null ? ' (${_hm(byWindow)})' : '';
       out.add(PredictionReason(Icons.hourglass_bottom_rounded,
           '$since suele aguantar ${_duration(window)} despierto$result',
@@ -202,6 +207,10 @@ class PredictionExplanation {
   // ─── Comunes ───────────────────────────────────────────────────────────────
 
   static PredictionReason _fromReason(Object? kind, DateTime at, bool predicted) {
+    if (kind == 'skipped') {
+      return PredictionReason(Icons.do_not_disturb_on_outlined,
+          'No hizo la siesta de las ${_hm(at)}: se cuenta desde entonces');
+    }
     if (kind == 'wake') {
       return predicted
           ? PredictionReason(Icons.wb_twilight_rounded, 'Contando con que se despierte hacia las ${_hm(at)}')

@@ -48,6 +48,10 @@ class SleepPrediction {
   /// Ya debería haber empezado: `start` es "ahora" y la hora calculada quedó atrás.
   final bool overdue;
 
+  /// Siesta cuyo hueco ya pasó sin registrarse (p. ej. en la guardería): la API
+  /// supone que la hizo a su hora. Se pinta en su sitio, pero no es "la próxima".
+  final bool assumed;
+
   /// De dónde sale la hora (ventana habitual, rutina, horas de noche...). Lo
   /// interpreta `PredictionExplanation`; null en respuestas antiguas de la API.
   final Map<String, dynamic>? basis;
@@ -63,6 +67,7 @@ class SleepPrediction {
     this.earliest,
     this.latest,
     this.overdue = false,
+    this.assumed = false,
     this.basis,
   });
 
@@ -100,6 +105,7 @@ class SleepPrediction {
       earliest: range is Map && range['earliest'] is String ? parseUtc(range['earliest'] as String) : null,
       latest: range is Map && range['latest'] is String ? parseUtc(range['latest'] as String) : null,
       overdue: json['overdue'] == true,
+      assumed: json['assumed'] == true,
       basis: json['basis'] is Map ? Map<String, dynamic>.from(json['basis'] as Map) : null,
     );
   }

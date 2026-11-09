@@ -5,7 +5,8 @@ from typing import Literal
 WOKE_UP = "woke_up"
 NAP = "nap"
 BED_TIME = "bed_time"
-SLEEP_CATEGORIES = (WOKE_UP, NAP, BED_TIME)
+NAP_SKIPPED = "nap_skipped"  # siesta prevista que se marcó como no hecha
+SLEEP_CATEGORIES = (WOKE_UP, NAP, BED_TIME, NAP_SKIPPED)
 
 
 @dataclass(frozen=True)
@@ -35,6 +36,9 @@ class SleepDay:
     wake: datetime | None
     naps: list[Nap] = field(default_factory=list)
     bed: datetime | None = None
+    # Horas de las siestas previstas que se marcaron como no hechas: cuentan en el nº de
+    # siesta del día (la siguiente prevista es la de después) pero no son sueño.
+    skipped: list[datetime] = field(default_factory=list)
 
     @property
     def anchor(self) -> datetime | None:

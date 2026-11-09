@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 
 from core.timeutils import parse_ts
 from prediction.config import PredictionConfig
-from prediction.models import BED_TIME, NAP, SLEEP_CATEGORIES, WOKE_UP, DayState, Nap, SleepDay, SleepEvent
+from prediction.models import BED_TIME, NAP, NAP_SKIPPED, SLEEP_CATEGORIES, WOKE_UP, DayState, Nap, SleepDay, SleepEvent
 
 
 def parse_events(raw: list[dict]) -> list[SleepEvent]:
@@ -54,6 +54,10 @@ def segment_days(events: list[SleepEvent], cfg: PredictionConfig) -> list[SleepD
                 # Siesta anterior sin cerrar y otra encima: la anterior se descarta como dato
                 current.naps.pop()
             current.naps.append(Nap(ev.start, ev.end, len(current.naps) + 1, ev.metadata))
+        elif ev.category == NAP_SKIPPED:
+            # Solo tiene sentido dentro de un día ya abierto (sin él no hay agenda que corregir)
+            if current is not None:
+                current.skipped.append(ev.start)
         elif ev.category == BED_TIME:
             if current is None:
                 current = SleepDay(wake=None)

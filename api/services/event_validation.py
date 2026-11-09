@@ -7,7 +7,7 @@ from models.event_metadata import metadata_error
 from models.event_models import EventCategory
 
 ATOMIC_CATEGORIES = {
-    EventCategory.WOKE_UP, EventCategory.BED_TIME, EventCategory.BATH,
+    EventCategory.WOKE_UP, EventCategory.BED_TIME, EventCategory.NAP_SKIPPED, EventCategory.BATH,
     EventCategory.DIAPER, EventCategory.MEDICINE, EventCategory.TEMPERATURE,
     EventCategory.GROWTH, EventCategory.MILESTONE,
 }
