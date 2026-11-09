@@ -7,6 +7,9 @@ import 'package:app/features/events/services/event_action_service.dart';
 import 'package:app/features/events/views/event_edit_launcher.dart';
 import 'package:app/features/events/views/event_form_launcher.dart';
 import 'package:app/features/events/widgets/home_screen/biological_cycle_view.dart';
+import 'package:app/features/events/providers/events_provider.dart';
+import 'package:app/features/notifications/sleep_alert_service.dart';
+import 'package:app/features/notifications/sleep_alert_settings.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   final String babyId;
@@ -44,16 +47,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     launchEventForm(context, ref, widget.babyId, eventType);
   }
 
-  void _showPredictionInfo() {
+  void _showPredictionInfo(SleepPrediction prediction) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => const PredictionInfoSheet(),
+      builder: (ctx) => PredictionInfoSheet(prediction: prediction),
     );
+  }
+
+  /// Reprograma los avisos de sueño con la agenda y los ajustes actuales. Se
+  /// ignoran los estados de carga para no programar con predicciones viejas.
+  void _syncSleepAlerts() {
+    final settings = ref.read(sleepAlertSettingsProvider).asData?.value;
+    final predictions = ref.read(predictionsProvider(widget.babyId)).asData?.value;
+    if (settings == null || predictions == null) return;
+    SleepAlertService.sync(predictions.schedule, settings);
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(predictionsProvider(widget.babyId), (_, next) {
+      if (next.asData != null) _syncSleepAlerts();
+    });
+    ref.listen(sleepAlertSettingsProvider, (_, next) {
+      if (next.asData != null) _syncSleepAlerts();
+    });
+
     return BiologicalCycleView(
       babyId: widget.babyId,
       onTriggerAction: _showEventForm,

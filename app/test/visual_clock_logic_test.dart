@@ -55,4 +55,42 @@ void main() {
     expect(range.start, DateTime(2026, 3, 9, 19, 30));
     expect(range.end, DateTime(2026, 3, 10, 7));
   });
+
+  test('noche en curso: el final es el despertar previsto, también tras medianoche', () {
+    final bed = [ev('bed_time', DateTime(2026, 3, 10, 20))];
+    final predicted = DateTime(2026, 3, 11, 7, 6);
+
+    // Antes de medianoche: el día de referencia es el de acostarse
+    final before = VisualClockLogic.computeRange(
+      events: bed,
+      yesterdayEvents: const [],
+      selectedDate: day,
+      isDayMode: false,
+      forceNightMode: true,
+      predictedWake: predicted,
+    );
+    // Después de medianoche: el bed_time ya es de "ayer"
+    final after = VisualClockLogic.computeRange(
+      events: [ev('night_waking', DateTime(2026, 3, 11, 0, 30))],
+      yesterdayEvents: bed,
+      selectedDate: DateTime(2026, 3, 11),
+      isDayMode: false,
+      forceNightMode: true,
+      predictedWake: predicted,
+    );
+    expect(before.end, predicted);
+    expect(after.end, predicted);
+  });
+
+  test('un despertar previsto que no pertenece a esta noche se ignora', () {
+    final range = VisualClockLogic.computeRange(
+      events: today,
+      yesterdayEvents: const [],
+      selectedDate: day,
+      isDayMode: false,
+      forceNightMode: null,
+      predictedWake: DateTime(2026, 3, 20, 7),
+    );
+    expect(range.end, DateTime(2026, 3, 11, 7, 30));
+  });
 }

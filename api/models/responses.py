@@ -49,16 +49,25 @@ class StatsData(BaseModel):
     charts: list[dict[str, Any]]
 
 
+class TimeRange(BaseModel):
+    """Intervalo en el que es más probable que ocurra (aprox. 50 % de las veces)."""
+    earliest: str
+    latest: str
+
+
 class PredictionItem(_Row):
     type: Literal["nap", "bedtime", "woke_up"]
     start: str
     end: Optional[str] = None
+    start_range: Optional[TimeRange] = None
     index: Optional[int] = None
     note: Optional[str] = None
     overdue: Optional[bool] = None
     is_catnap: Optional[bool] = None
     # Bloque opaco que la app guarda en el evento real (ver prediction/feedback.py)
     predicted_feedback: Optional[dict[str, Any]] = None
+    # De dónde sale la hora (ventana habitual, hora de rutina...), para explicarla en la app
+    basis: Optional[dict[str, Any]] = None
 
 
 class Predictions(BaseModel):

@@ -23,6 +23,22 @@ void main() {
     expect(meta.keys.every((k) => k.startsWith('predicted_') || k == 'nap_index'), isTrue);
   });
 
+  test('la predicción lee su margen (start_range) y lo formatea', () {
+    final prediction = SleepPrediction.fromJson({
+      'type': 'bedtime',
+      'start': '2026-03-01T19:30:00Z',
+      'start_range': {'earliest': '2026-03-01T19:15:00Z', 'latest': '2026-03-01T19:45:00Z'},
+    });
+    expect(prediction.earliest, DateTime.parse('2026-03-01T19:15:00Z').toLocal());
+    expect(prediction.latest, DateTime.parse('2026-03-01T19:45:00Z').toLocal());
+    final from = prediction.earliest!, to = prediction.latest!;
+    expect(prediction.rangeLabel,
+        'entre ${from.hour}:${from.minute.toString().padLeft(2, '0')} y ${to.hour}:${to.minute.toString().padLeft(2, '0')}');
+
+    final legacy = SleepPrediction.fromJson({'type': 'bedtime', 'start': '2026-03-01T19:30:00Z'});
+    expect(legacy.rangeLabel, isNull);
+  });
+
   test('todas las etiquetas de estadísticas tienen código de API', () {
     for (final entry in StatsCategorySelector.subCategories.entries) {
       expect(ApiService.statCategoryCodes, contains(entry.key));

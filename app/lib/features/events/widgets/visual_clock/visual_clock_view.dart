@@ -20,7 +20,7 @@ class VisualClockView extends StatefulWidget {
   final bool? forceNightMode;
   final DateTime? biologicalCycleEnd;
   final Function(Map<String, dynamic>)? onTapEvent;
-  final VoidCallback? onTapPrediction;
+  final void Function(SleepPrediction)? onTapPrediction;
   final AlignmentGeometry alignment;
 
   const VisualClockView({
@@ -120,6 +120,7 @@ class _VisualClockViewState extends State<VisualClockView> with SingleTickerProv
       forceNightMode: widget.forceNightMode,
       biologicalCycleEnd: widget.biologicalCycleEnd,
       sleepPrediction: widget.sleepPrediction,
+      predictedWake: widget.wakePrediction?.start,
     );
 
     final startTime = range.start;
@@ -329,7 +330,7 @@ class _VisualClockViewState extends State<VisualClockView> with SingleTickerProv
                       left: x - iconR,
                       top: y - iconR,
                       child: GestureDetector(
-                        onTap: widget.onTapPrediction,
+                        onTap: () => widget.onTapPrediction?.call(pred),
                         child: EventIcon(eventType: EventType.nap, isPrediction: true, scale: scale),
                       ),
                     );
@@ -352,7 +353,7 @@ class _VisualClockViewState extends State<VisualClockView> with SingleTickerProv
                         left: x - iconR,
                         top: y - iconR,
                         child: GestureDetector(
-                          onTap: widget.onTapPrediction,
+                          onTap: () => widget.onTapPrediction?.call(pred),
                           child: EventIcon(eventType: EventType.bedtime, isPrediction: true, scale: scale),
                         ),
                       );
@@ -376,7 +377,7 @@ class _VisualClockViewState extends State<VisualClockView> with SingleTickerProv
                         left: x - iconR,
                         top: y - iconR,
                         child: GestureDetector(
-                          onTap: widget.onTapPrediction,
+                          onTap: () => widget.onTapPrediction?.call(pred),
                           child: EventIcon(eventType: EventType.wokeUp, isPrediction: true, scale: scale),
                         ),
                       );

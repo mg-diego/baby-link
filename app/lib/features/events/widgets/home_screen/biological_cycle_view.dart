@@ -19,7 +19,7 @@ class BiologicalCycleView extends ConsumerWidget {
   final Function(EventType) onTriggerAction;
   final Function(Map<String, dynamic>) onTapEvent;
   final Function(Map<String, dynamic>) onStopEvent;
-  final VoidCallback onTapPrediction;
+  final void Function(SleepPrediction) onTapPrediction;
 
   const BiologicalCycleView({
     super.key,

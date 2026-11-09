@@ -49,6 +49,8 @@ class VisualClockLogic {
     required bool? forceNightMode,
     DateTime? biologicalCycleEnd,
     List<SleepPrediction>? sleepPrediction,
+    // Despertar previsto por la API (solo se usa si la noche no tiene woke_up)
+    DateTime? predictedWake,
   }) {
     final todayAsc = List<Map<String, dynamic>>.from(events)
       ..sort((a, b) => a['start_time'].compareTo(b['start_time']));
@@ -104,11 +106,16 @@ class VisualClockLogic {
         }
       }
 
-      var end = woke ?? DateTime(d.year, d.month, d.day, 8, 0);
+      // Sin despertar registrado (la noche está en curso): el fin estimado del
+      // ciclo (inicio) o el despertar previsto. No se usa una hora fija: al pasar
+      // la medianoche cambia la fecha de referencia y el final saltaría.
+      final estimate = biologicalCycleEnd ?? predictedWake;
+      final estimateFits = estimate != null &&
+          estimate.isAfter(start) &&
+          estimate.difference(start) <= const Duration(hours: 16);
 
-      if (end.isBefore(start)) {
-        end = start.add(const Duration(hours: 11, minutes: 30));
-      }
+      final end = woke ??
+          (estimateFits ? estimate : start.add(const Duration(hours: 11, minutes: 30)));
 
       return (start: start, end: end);
     }

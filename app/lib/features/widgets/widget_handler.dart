@@ -2,6 +2,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/network/api_service.dart';
+import '../notifications/sleep_alert_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> backgroundCallback(Uri? uri) async {
@@ -50,6 +51,11 @@ Future<void> backgroundCallback(Uri? uri) async {
 
   try {
     await ApiService.registerEvent(babyId, category, metadata);
+    // El evento cambia la agenda prevista: reprogramar los avisos de sueño
+    // (p. ej. que no avise de una siesta que ya ha empezado)
+    try {
+      await SleepAlertService.syncFromApi(babyId);
+    } catch (_) {}
     final widgetIdStr = uri.queryParameters['widgetId'];
     if (widgetIdStr != null) {
       final oldTitle = await HomeWidget.getWidgetData<String>('widget_${widgetIdStr}_title');

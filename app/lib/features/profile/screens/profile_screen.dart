@@ -2,6 +2,8 @@ import 'package:app/features/auth/providers/auth_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../babies/providers/baby_provider.dart';
+import '../../notifications/sleep_alert_service.dart';
+import '../../notifications/sleep_alert_settings_card.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -63,6 +65,10 @@ class ProfileScreen extends ConsumerWidget {
             ),
 
             const SizedBox(height: 30),
+            _buildSectionTitle(context, 'Avisos de sueño'),
+            const SleepAlertSettingsCard(),
+
+            const SizedBox(height: 30),
             _buildSectionTitle(context, 'Cuenta'),
             
             _buildInfoCard(
@@ -74,6 +80,7 @@ class ProfileScreen extends ConsumerWidget {
               onTap: () async {
                 final confirm = await _showLogoutDialog(context);
                 if (confirm == true) {
+                  await SleepAlertService.cancelAll();
                   await authService.signOut();
                   if (context.mounted) {
                     Navigator.of(context).popUntil((route) => route.isFirst);

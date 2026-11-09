@@ -32,10 +32,25 @@ class SleepPrediction {
   final DateTime? end;
   final String? note;
 
+  /// Siesta corta de rescate (no cabe una normal antes de la noche).
+  final bool isCatnap;
+
   /// Bloque opaco que devuelve la API (corrección aplicada, siesta corta,
   /// retrasada...). Se guarda tal cual en el evento real para que el backend
   /// pueda medir el error de sus predicciones.
   final Map<String, dynamic>? feedback;
+
+  /// Intervalo en el que es más probable que empiece (≈ 50 % de las veces). Se
+  /// calcula con lo regular que es el bebé: cuanto más irregular, más ancho.
+  final DateTime? earliest;
+  final DateTime? latest;
+
+  /// Ya debería haber empezado: `start` es "ahora" y la hora calculada quedó atrás.
+  final bool overdue;
+
+  /// De dónde sale la hora (ventana habitual, rutina, horas de noche...). Lo
+  /// interpreta `PredictionExplanation`; null en respuestas antiguas de la API.
+  final Map<String, dynamic>? basis;
 
   const SleepPrediction({
     required this.type,
@@ -43,12 +58,25 @@ class SleepPrediction {
     required this.start,
     this.end,
     this.note,
+    this.isCatnap = false,
     this.feedback,
+    this.earliest,
+    this.latest,
+    this.overdue = false,
+    this.basis,
   });
 
   bool get isNap => type == 'nap';
   bool get isBedtime => type == 'bedtime';
   bool get isWakeUp => type == 'woke_up';
+
+  /// "entre 9:20 y 9:50", o null si la API no envía margen.
+  String? get rangeLabel {
+    if (earliest == null || latest == null) return null;
+    String hm(DateTime t) => '${t.hour}:${t.minute.toString().padLeft(2, '0')}';
+    final from = hm(earliest!), to = hm(latest!);
+    return from == to ? null : 'entre $from y $to';
+  }
 
   factory SleepPrediction.fromJson(Map<String, dynamic> json) {
     DateTime parseUtc(String dateStr) {
@@ -58,15 +86,21 @@ class SleepPrediction {
       return DateTime.parse(dateStr).toLocal();
     }
 
+    final range = json['start_range'];
     return SleepPrediction(
       type: json['type'] as String,
       index: json['index'] as int?,
       start: parseUtc(json['start'] as String),
       end: json['end'] != null ? parseUtc(json['end'] as String) : null,
       note: json['note'] as String?,
+      isCatnap: json['is_catnap'] == true,
       feedback: json['predicted_feedback'] is Map
           ? Map<String, dynamic>.from(json['predicted_feedback'] as Map)
           : null,
+      earliest: range is Map && range['earliest'] is String ? parseUtc(range['earliest'] as String) : null,
+      latest: range is Map && range['latest'] is String ? parseUtc(range['latest'] as String) : null,
+      overdue: json['overdue'] == true,
+      basis: json['basis'] is Map ? Map<String, dynamic>.from(json['basis'] as Map) : null,
     );
   }
 

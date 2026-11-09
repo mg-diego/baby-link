@@ -11,6 +11,12 @@ y se queda en 1/3 del sesgo real (c = g·(D − c) -> c = D/3 con g = 0.5).
 
 Los eventos antiguos sin `predicted_feedback` se ignoran: no sabemos qué corrección
 llevaban y contaminarían la estimación.
+
+`predicted_feedback.base_start` es la predicción sin recortar a "ahora". Sin ella, cuando
+el bebé se dormía más tarde de lo previsto la app mostraba "ya" (`overdue`) y ese día no se
+podía medir: solo se aprendía de los días en que se adelantaba y la corrección acababa
+adelantando las predicciones. Con `base_start` se mide siempre; los eventos anteriores
+a este campo que iban con retraso se siguen ignorando.
 """
 from statistics import median
 
@@ -27,18 +33,24 @@ def compute_biases(events: list[SleepEvent], cfg: PredictionConfig) -> Biases:
     for ev in events:  # orden cronológico
         meta = ev.metadata or {}
         fb = meta.get(FEEDBACK_KEY)
-        if not isinstance(fb, dict) or fb.get("overdue"):
-            continue  # sin datos de corrección, o la predicción ya iba con retraso
+        if not isinstance(fb, dict):
+            continue  # sin datos de corrección
         try:
-            predicted = parse_ts(meta.get("predicted_start_time"))
+            shown = parse_ts(meta.get("predicted_start_time"))
             predicted_end = parse_ts(meta.get("predicted_end_time"))
+            base = parse_ts(fb.get("base_start"))
         except ValueError:
             continue
-        if predicted is None:
+        if shown is None:
             continue
+        # Hora de inicio prevista: la base sin recortar; en eventos antiguos, la mostrada,
+        # que solo vale si no iba con retraso (entonces era "ahora", no una predicción)
+        predicted = base if base is not None else (None if fb.get("overdue") else shown)
 
-        error = (ev.start - predicted).total_seconds() / 60 + float(fb.get("start_bias_min") or 0)
-        if abs(error) <= cfg.feedback_outlier_min:
+        error = None
+        if predicted is not None:
+            error = (ev.start - predicted).total_seconds() / 60 + float(fb.get("start_bias_min") or 0)
+        if error is not None and abs(error) <= cfg.feedback_outlier_min:
             if ev.category == NAP:
                 index = meta.get("nap_index") or fb.get("nap_index") or 1
                 buckets["ww_first" if int(index) == 1 else "ww_mid"].append(error)
@@ -48,7 +60,7 @@ def compute_biases(events: list[SleepEvent], cfg: PredictionConfig) -> Biases:
                 buckets["wake"].append(error)
 
         if ev.category == NAP and ev.end and predicted_end and not fb.get("catnap"):
-            predicted_minutes = (predicted_end - predicted).total_seconds() / 60
+            predicted_minutes = (predicted_end - shown).total_seconds() / 60
             actual_minutes = (ev.end - ev.start).total_seconds() / 60
             duration_error = actual_minutes - predicted_minutes + float(fb.get("duration_bias_min") or 0)
             if abs(duration_error) <= cfg.feedback_outlier_min:

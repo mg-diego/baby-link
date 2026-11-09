@@ -60,7 +60,7 @@ class DayState:
 class SleepProfile:
     nap_count: int
     ww_first: float            # minutos: despertar -> 1ª siesta
-    ww_mid: float              # minutos: fin de siesta -> siguiente siesta
+    ww_mid: float              # minutos: fin de siesta -> siguiente siesta (todas juntas)
     ww_evening: float          # minutos: última siesta (o despertar) -> dormir
     nap_minutes: tuple[float, ...]  # duración por índice de siesta
     day_minutes: float         # despertar -> dormir
@@ -70,9 +70,38 @@ class SleepProfile:
     # Minutos que se acorta la tarde por cada minuto de siesta "perdido" (0 = no compensa).
     # Se aprende del historial: unos bebés se duermen antes tras una mala siesta y otros no.
     deficit_slope: float = 0.0
+    # Ventana antes de la siesta 2, 3...: a lo largo del día suelen alargarse.
+    ww_by_index: tuple[float, ...] = ()
+    # Hora habitual de dormir, minutos desde la medianoche del día (puede pasar de 1440).
+    bed_clock: float = 20 * 60
+    # Cuánto se acerca la hora de dormir a "despertar + duración del día" (day) y a la
+    # hora habitual (clock), frente a "última siesta + ventana". 0 = manda la ventana.
+    bed_day_weight: float = 0.0
+    bed_clock_weight: float = 0.0
+    # Despertar: 0 = a su hora de siempre, 1 = tras la duración habitual de la noche.
+    wake_duration_weight: float = 0.15
+    # Dispersión (minutos, ~desviación típica) de cada métrica: da el margen de las predicciones.
+    spread: dict = field(default_factory=dict)
+    weekend: bool | None = None  # perfil de fin de semana / entre semana (None = todos los días)
+    days_learned: int = 0        # días de historial de los que se ha aprendido
 
     def nap_duration(self, index: int) -> float:
         return self.nap_minutes[min(max(index, 1), len(self.nap_minutes)) - 1]
+
+    def expected_nap(self, index: int) -> float:
+        """Lo que se espera que duerma la siesta `index`. Una siesta por encima de las
+        habituales (p. ej. de rescate) es sueño extra: se espera 0 y no cuenta como déficit."""
+        return 0.0 if index > self.nap_count else self.nap_duration(index)
+
+    def window_before(self, index: int) -> float:
+        if index <= 1:
+            return self.ww_first
+        if self.ww_by_index:
+            return self.ww_by_index[min(index - 2, len(self.ww_by_index) - 1)]
+        return self.ww_mid
+
+    def sd(self, metric: str, default: float = 20.0) -> float:
+        return self.spread.get(metric, default)
 
 
 @dataclass(frozen=True)

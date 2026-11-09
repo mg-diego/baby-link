@@ -202,6 +202,9 @@ def test_predictions_combined(client, events):
     assert body["data"]["schedule"][-1]["type"] == "bedtime"
     assert body["data"]["wake"]["type"] == "woke_up"
     assert "predicted_feedback" in body["data"]["wake"]
+    for item in body["data"]["schedule"] + [body["data"]["wake"]]:
+        assert item["start_range"]["earliest"] <= item["start_range"]["latest"]
+        assert "base_start" in item["predicted_feedback"]
 
 
 # ─── Home Assistant ───────────────────────────────────────────────────────────

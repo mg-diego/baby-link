@@ -116,5 +116,10 @@ La API y la app cambian de contrato a la vez (rutas nuevas y token obligatorio):
 ```bash
 cd api
 python -m pytest
-python -m tools.backtest --baby-id <uuid>                     # error del motor sobre el historial real (solo lectura)
+python -m tools.backtest --baby-id <uuid> --baseline          # error del motor sobre el historial real (solo lectura)
+python -m tools.cohort --save antes.json                      # error sobre un grupo de bebés sintéticos muy distintos
+python -m tools.cohort --compare antes.json                   # ...y la diferencia tras un cambio en el motor
+python -m tools.cohort --set day_type_split=false             # probar un parámetro de PredictionConfig sin tocar código
 ```
+
+Antes de cambiar el motor de predicciones o sus parámetros, mide con `tools.cohort` (que no se ajuste a un solo bebé) y con `tools.backtest` sobre historiales reales. `tests/test_prediction.py::test_cohort_quality_guard` falla si la calidad del grupo empeora.

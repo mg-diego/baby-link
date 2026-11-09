@@ -1,3 +1,4 @@
+import random
 from datetime import date, datetime, timedelta
 
 import pytest
@@ -5,8 +6,11 @@ import pytest
 from core.timeutils import parse_ts
 from prediction import DEFAULT_CONFIG, predict
 from prediction.feedback import compute_biases
-from prediction.segmentation import parse_events
+from prediction.profile import half_life_for_age, learn_profile
+from prediction.segmentation import parse_events, segment_days
 from tests.synthetic import MADRID, event, local, make_day, make_history
+from tools.backtest import _rows_before
+from tools.cohort import BabySpec, Routine, evaluate, simulate
 
 DOB_10M = date(2025, 8, 15)          # ~10 meses en junio de 2026 -> 2 siestas por edad
 FIRST = date(2026, 6, 1)
@@ -214,3 +218,214 @@ def test_deficit_compensation_is_learned(slope):
     assert out.profile.deficit_slope == pytest.approx(slope * 14 / 19, abs=0.1)
     expected = local(TODAY, 14, 45) + timedelta(minutes=210 - slope * 45)
     assert abs(minutes(expected, bedtime(out))) <= 15
+
+
+def test_rescue_catnap_is_extra_sleep_not_deficit():
+    """Una siesta de rescate ya hecha contaba como ~60' de déficit (se esperaba una siesta
+    normal) y adelantaba aún más la noche."""
+    base = _deficit_history(0.8) + [event("woke_up", local(TODAY, 7)),
+                                    event("nap", local(TODAY, 9, 30), local(TODAY, 10)),
+                                    event("nap", local(TODAY, 12, 30), local(TODAY, 13))]
+    before = run(base, local(TODAY, 13, 5))
+    after = run(base + [event("nap", local(TODAY, 15, 30), local(TODAY, 16))], local(TODAY, 16, 5))
+    assert after.profile.expected_nap(3) == 0
+    # Dormir 30' más no puede acortar la ventana de tarde respecto a la prevista sin ella
+    rescue = naps(before)[0]
+    evening_before = minutes(parse_ts(rescue["end"]), bedtime(before))
+    evening_after = minutes(local(TODAY, 16), bedtime(after))
+    assert evening_after >= evening_before - 5
+
+
+# ─── Feedback sin sesgo de censura ────────────────────────────────────────────
+
+def test_feedback_uses_base_start_even_when_overdue():
+    base = local(TODAY, 19)
+    rows = [_fb_event("bed_time", base + timedelta(days=d, minutes=40),
+                      (base + timedelta(days=d, minutes=35)).isoformat(),
+                      applied=0, overdue=True, base_start=(base + timedelta(days=d)).isoformat())
+            for d in range(4)]
+    # Lo mostrado era "ahora" (35' tarde), pero la predicción era las 19:00 -> error 40'
+    biases = compute_biases(parse_events(rows), DEFAULT_CONFIG)
+    assert biases.bedtime == pytest.approx(DEFAULT_CONFIG.feedback_gain * 40)
+
+
+def test_closed_loop_without_censoring_bias():
+    """La app refresca la predicción al abrirla para registrar: si el bebé se duerme tarde,
+    lo mostrado ya es "ahora" (overdue). Antes esos días se descartaban y la corrección
+    adelantaba las predicciones ~15'. Con `base_start` se mide igual que sin refresco."""
+    rng = random.Random(3)
+    true_ww, sigma = 180, 25
+    rows = make_history(FIRST, 7, windows=(true_ww, 180), noise=sigma, seed=3)
+    errors = []
+    for i in range(7, 47):
+        day = FIRST + timedelta(days=i)
+        wake = local(day, 7)
+        rows.append(event("woke_up", wake))
+        actual = wake + timedelta(minutes=true_ww + rng.gauss(0, sigma))
+        errors.append(minutes(parse_ts(naps(run(rows, wake + timedelta(minutes=5)))[0]["start"]), actual))
+        logged = naps(run(rows, actual))[0]  # lo que muestra la app en el momento de registrar
+        meta = {"predicted_start_time": logged["start"], "predicted_end_time": logged["end"],
+                "nap_index": 1, "predicted_feedback": logged["predicted_feedback"]}
+        rows.append(event("nap", actual, actual + timedelta(minutes=90), meta))
+        rest = make_day(day, windows=(true_ww, 180), noise=sigma, rng=rng)
+        rows += [r for r in rest if r["category"] != "woke_up"][1:]
+    tail = errors[-20:]
+    assert abs(sum(tail) / len(tail)) <= 8
+
+
+# ─── Comportamientos que se aprenden por bebé ─────────────────────────────────
+
+def _at(rows, instant, dob):
+    return predict(_rows_before(rows, instant), dob, instant, MADRID)
+
+
+def _last(rows, category):
+    return parse_ts([r for r in rows if r["category"] == category][-1]["start_time"])
+
+
+TWO_NAPS = Routine(7 * 60, (180, 210), (75, 75), 240)
+
+
+@pytest.mark.parametrize("weight", [0.0, 0.8])
+def test_wake_clock_vs_night_duration_is_learned(weight):
+    """Unos bebés se despiertan a su hora pase lo que pase y otros tras X horas de noche."""
+    spec = BabySpec("w", 12, TWO_NAPS, wake_duration_weight=weight, night=660, noise=25, days=28)
+    rows, dob = simulate(spec, seed=1)
+    out = _at(rows, _last(rows, "bed_time") + timedelta(minutes=5), dob)
+    assert out.profile.wake_duration_weight == pytest.approx(max(weight, 0.15), abs=0.2)
+
+
+def test_routine_bedtime_is_learned():
+    """Rutina de dormir a las 20:30 aunque las siestas cambien: manda el reloj, no la ventana."""
+    spec = BabySpec("r", 9, Routine(7 * 60, (150, 180), (75, 75), 210), bed_clock=20 * 60 + 30,
+                    bed_clock_weight=0.9, noise=25, days=28)
+    rows, dob = simulate(spec, seed=2)
+    p = _at(rows, _last(rows, "woke_up") + timedelta(minutes=5), dob).profile
+    assert p.bed_day_weight + p.bed_clock_weight >= 0.6
+    assert abs(p.bed_clock - (20 * 60 + 30)) <= 15
+
+
+def test_window_driven_bedtime_ignores_the_clock():
+    spec = BabySpec("v", 12, TWO_NAPS, noise=25, days=28)
+    rows, dob = simulate(spec, seed=4)
+    p = _at(rows, _last(rows, "woke_up") + timedelta(minutes=5), dob).profile
+    assert p.bed_day_weight + p.bed_clock_weight <= 0.25
+
+
+def test_each_window_is_learned_separately():
+    """Con 3 siestas las ventanas se alargan durante el día (105' -> 135' -> 170')."""
+    spec = BabySpec("p", 7, Routine(6 * 60 + 45, (105, 135, 170), (60, 80, 35), 180), noise=10, days=21)
+    rows, dob = simulate(spec, seed=0)
+    p = _at(rows, _last(rows, "woke_up") + timedelta(minutes=5), dob).profile
+    assert p.nap_count == 3
+    assert abs(p.window_before(2) - 135) <= 10 and abs(p.window_before(3) - 170) <= 10
+
+
+def test_nap_count_outside_age_table_is_trusted_with_enough_days():
+    """Con 3,3 meses la tabla por edad dice 4-5 siestas; si hace 3 de forma estable, son 3."""
+    spec = BabySpec("y", 3.3, Routine(7 * 60, (90, 105, 120), (75, 90, 50), 120), noise=10, days=14)
+    rows, dob = simulate(spec, seed=0)
+    assert _at(rows, _last(rows, "woke_up") + timedelta(minutes=5), dob).profile.nap_count == 3
+
+
+def test_daycare_weekdays_and_weekends_get_their_own_schedule():
+    spec = BabySpec("d", 15, Routine(7 * 60 + 45, (180, 210), (75, 45), 240),
+                    daycare=Routine(6 * 60 + 45, (300,), (120,), 285), days=28)
+    rows, dob = simulate(spec, seed=0)
+    wakes = [parse_ts(r["start_time"]) for r in rows if r["category"] == "woke_up"]
+    saturday = next(w for w in reversed(wakes) if w.astimezone(MADRID).weekday() == 5)
+    monday = next(w for w in reversed(wakes) if w.astimezone(MADRID).weekday() == 0)
+    sat = _at(rows, saturday + timedelta(minutes=5), dob).profile
+    mon = _at(rows, monday + timedelta(minutes=5), dob).profile
+    assert (sat.weekend, sat.nap_count) == (True, 2)
+    assert (mon.weekend, mon.nap_count) == (False, 1)
+    assert abs(mon.wake_clock - (6 * 60 + 45)) <= 15
+    assert abs(sat.wake_clock - (7 * 60 + 45)) <= 20
+
+
+def test_same_schedule_every_day_is_not_split():
+    """Sin guardería, entre semana y fin de semana salen prácticamente iguales."""
+    days = segment_days(parse_events(make_history(FIRST, 21, noise=15, seed=5)), DEFAULT_CONFIG)
+    now = local(FIRST + timedelta(days=21), 6)
+    sat = learn_profile(days, DOB_10M, now, MADRID, DEFAULT_CONFIG, target_day=date(2026, 6, 20))
+    mon = learn_profile(days, DOB_10M, now, MADRID, DEFAULT_CONFIG, target_day=date(2026, 6, 22))
+    assert (sat.weekend, mon.weekend) == (True, False)
+    assert abs(sat.ww_first - mon.ww_first) <= 5
+    assert abs(sat.wake_clock - mon.wake_clock) <= 5
+    assert abs(sat.bed_clock - mon.bed_clock) <= 5
+
+
+def test_young_babies_forget_faster():
+    assert half_life_for_age(60, DEFAULT_CONFIG) == DEFAULT_CONFIG.half_life_young_days
+    assert half_life_for_age(300, DEFAULT_CONFIG) == DEFAULT_CONFIG.half_life_days
+    assert DEFAULT_CONFIG.half_life_young_days < half_life_for_age(135, DEFAULT_CONFIG) < DEFAULT_CONFIG.half_life_days
+
+
+# ─── Margen de las predicciones ───────────────────────────────────────────────
+
+def _width(item) -> float:
+    return minutes(parse_ts(item["start_range"]["earliest"]), parse_ts(item["start_range"]["latest"]))
+
+
+def test_every_prediction_has_a_range_around_it():
+    out = run(make_history(FIRST, 14, noise=15, seed=2) + [event("woke_up", local(TODAY, 7))], local(TODAY, 7, 5))
+    for item in out.schedule + [out.wake]:
+        rng = item["start_range"]
+        assert parse_ts(rng["earliest"]) <= parse_ts(item["start"]) <= parse_ts(rng["latest"])
+    # Lo que está más lejos (la noche) es más incierto que la próxima siesta
+    assert _width(out.schedule[-1]) > _width(naps(out)[0])
+
+
+def test_irregular_baby_gets_wider_range():
+    def first_width(noise):
+        rows = make_history(FIRST, 14, noise=noise, seed=2) + [event("woke_up", local(TODAY, 7))]
+        return _width(naps(run(rows, local(TODAY, 7, 5)))[0])
+    assert first_width(35) > 1.5 * first_width(8)
+
+
+def test_overdue_range_starts_now():
+    now = local(TODAY, 11)
+    first = naps(run(HISTORY + [event("woke_up", local(TODAY, 7))], now))[0]
+    assert parse_ts(first["start_range"]["earliest"]) == now
+    assert parse_ts(first["predicted_feedback"]["base_start"]) < now
+
+
+# ─── Grupo de bebés sintéticos (red de seguridad de calidad) ─────────────────
+
+def test_cohort_quality_guard():
+    """El motor tiene que ganar con holgura a "como ayer" en todo el grupo y no empeorar
+    respecto a lo medido al ajustar los parámetros (ver tools/cohort.py). Si un cambio
+    sube la puntuación, mídelo con `python -m tools.cohort --compare` antes de relajar esto."""
+    res = evaluate(seeds=(0,))
+    assert res["engine"]["score"] <= 21.0
+    assert res["engine"]["score"] < 0.75 * res["baseline"]["score"]
+    for name, metric in res["engine"]["metrics"].items():
+        if metric["coverage"] is not None:
+            assert 0.35 <= metric["coverage"] <= 0.65, name
+
+
+# ─── Explicación de cada predicción (basis) ───────────────────────────────────
+
+def test_every_prediction_explains_where_it_comes_from():
+    wake = local(TODAY, 7)
+    out = run(HISTORY + [event("woke_up", wake)], local(TODAY, 7, 5))
+    first, second = naps(out)[:2]
+    b1, b2 = first["basis"], second["basis"]
+    assert (b1["from"], parse_ts(b1["from_time"]), b1["from_predicted"]) == ("wake", wake, False)
+    assert abs(minutes(wake, parse_ts(first["start"])) - b1["window_min"]) <= 1
+    assert (b2["from"], parse_ts(b2["from_time"]), b2["from_predicted"]) == ("nap", parse_ts(first["end"]), True)
+    assert b1["days"] == 14 and b1["nap_count"] == 2
+
+    bed = out.schedule[-1]["basis"]
+    assert bed["from"] == "nap" and parse_ts(bed["from_time"]) == parse_ts(naps(out)[-1]["end"])
+    assert 0 <= bed["routine_weight"] + bed["day_length_weight"] <= 1
+    assert out.wake["basis"]["bed_predicted"] is True
+    assert parse_ts(out.wake["basis"]["bed"]) == bedtime(out)
+
+
+def test_night_wake_basis_uses_real_bedtime():
+    bed = local(TODAY, 20)
+    out = run(HISTORY + [event("woke_up", local(TODAY, 7)), event("bed_time", bed)], local(TODAY, 21))
+    basis = out.wake["basis"]
+    assert parse_ts(basis["bed"]) == bed and basis["bed_predicted"] is False
+    assert abs(minutes(bed, parse_ts(basis["by_night"])) - basis["night_min"]) <= 1

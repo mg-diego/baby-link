@@ -35,6 +35,7 @@ class DynamicClockMessage extends StatelessWidget {
     final now = DateTime.now();
     String label = "";
     String timeString = "";
+    String? rangeText;
     String? bottomPillText;
 
     final allDesc = [...yesterdayEvents, ...events]
@@ -121,6 +122,7 @@ class DynamicClockMessage extends StatelessWidget {
               : (nextSleep.isNap ? "Próxima siesta en" : "Hora de dormir en");
               
           timeString = h == 0 && m == 0 ? 'Ahora' : h == 0 ? '$m min' : '${h}h ${m}m';
+          if (!isLateSleep) rangeText = nextSleep.rangeLabel;
           bottomPillText = "Lleva despierto ${awakeH > 0 ? '${awakeH}h ${awakeM}min' : '${awakeM}min'}";
         } else {
           label = "Lleva despierto";
@@ -148,6 +150,10 @@ class DynamicClockMessage extends StatelessWidget {
           
           label = "Durmiendo";
           timeString = h == 0 && m == 0 ? 'Ahora' : h == 0 ? '$m min' : '${h}h ${m}m';
+          final wakeRange = wakePrediction?.rangeLabel;
+          if (wakeRange != null && wakePrediction!.start.isAfter(now)) {
+            rangeText = 'Despertará $wakeRange';
+          }
         }
       }
     }
@@ -209,6 +215,20 @@ class DynamicClockMessage extends StatelessWidget {
                   : null,
             ),
           ),
+          if (rangeText != null) ...[
+            SizedBox(height: 4 * scale),
+            Text(
+              rangeText,
+              style: TextStyle(
+                fontSize: 12 * scale,
+                fontWeight: FontWeight.w500,
+                color: labelColor,
+                shadows: forceNightMode != null && isDayMode
+                    ? [Shadow(color: Colors.black.withOpacity(dayShadow), blurRadius: 6 * scale)]
+                    : null,
+              ),
+            ),
+          ],
           if (bottomPillText != null) ...[
             SizedBox(height: 8 * scale),
             Container(
