@@ -30,7 +30,7 @@ void showSleepAlertsSheet(BuildContext context, String babyId) {
   );
 }
 
-/// Ajustes rápidos de los avisos de sueño, accesibles desde Inicio.
+/// Ajustes rápidos de los avisos de sueño, accesibles desde "Mi bebé".
 class SleepAlertsSheet extends ConsumerWidget {
   final String babyId;
 

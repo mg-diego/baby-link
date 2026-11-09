@@ -9,6 +9,7 @@ import 'package:app/features/babies/views/widgets/editable_baby_avatar.dart';
 import 'package:app/features/babies/views/widgets/growth_chart.dart';
 import 'package:app/features/events/providers/events_provider.dart';
 import 'package:app/features/events/views/event_form_launcher.dart';
+import 'package:app/features/notifications/sleep_alerts_sheet.dart';
 import 'package:app/features/profile/screens/profile_screen.dart';
 
 /// Medidas que se registran en los eventos de crecimiento.
@@ -70,6 +71,13 @@ class BabyInfoScreen extends ConsumerWidget {
         title: const Text('Mi bebé'),
         centerTitle: true,
         actions: [
+          // Ajustes de los avisos de sueño (antes, la campana de Inicio).
+          if (babyAsync.asData?.value?['id'] case final String babyId)
+            IconButton(
+              icon: const Icon(Icons.notifications_outlined),
+              tooltip: 'Avisos de sueño',
+              onPressed: () => showSleepAlertsSheet(context, babyId),
+            ),
           IconButton(
             icon: const Icon(Icons.manage_accounts_outlined),
             tooltip: 'Mi cuenta',

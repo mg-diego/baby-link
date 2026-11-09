@@ -11,7 +11,7 @@ import 'package:app/features/events/widgets/visual_clock/visual_clock_view.dart'
 import 'day_sky_background.dart';
 import 'night_sky_background.dart';
 import 'home_header.dart';
-import 'sleep_alert_button.dart';
+import 'daycare_scan_button.dart';
 import 'biological_action_bar.dart';
 import 'ongoing_event_banner.dart';
 
@@ -238,7 +238,7 @@ class BiologicalCycleView extends ConsumerWidget {
                     horizontal: size.width * 0.05,
                     vertical: size.height * 0.02,
                   ),
-                  // IntrinsicHeight + stretch: el botón de avisos toma la
+                  // IntrinsicHeight + stretch: el botón de la guardería toma la
                   // misma altura que la tarjeta del bebé.
                   child: IntrinsicHeight(
                     child: Row(
@@ -262,7 +262,7 @@ class BiologicalCycleView extends ConsumerWidget {
                           ),
                         ),
                         const SizedBox(width: 12),
-                        SleepAlertButton(
+                        DaycareScanButton(
                           babyId: babyId,
                           isNightMode: isNightMode,
                           dayTextPrimary: _dayTextPrimary(),

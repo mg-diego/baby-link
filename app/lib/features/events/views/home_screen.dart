@@ -2,6 +2,7 @@ import 'package:app/features/events/widgets/home_screen/prediction_info_sheet.da
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:app/features/daycare_scan/daycare_scan_flow.dart';
 import 'package:app/shared/models/event_type.dart';
 import 'package:app/features/events/services/event_action_service.dart';
 import 'package:app/features/events/views/event_edit_launcher.dart';
@@ -25,6 +26,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Escaneo de la hoja de la guardería interrumpido porque Android cerró la
+    // app con la cámara abierta: se retoma con la foto recuperada.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) recoverLostDaycareScan(context, widget.babyId);
+    });
   }
 
   @override

@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Para hacer la foto de perfil del bebé y de los hitos.</string>
+	<string>Para hacer la foto de perfil del bebé y de los hitos, y para leer las siestas de la hoja de la guardería.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Para elegir la foto de perfil del bebé y de los hitos.</string>
+	<string>Para elegir la foto de perfil del bebé y de los hitos, y la foto de la hoja de la guardería.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

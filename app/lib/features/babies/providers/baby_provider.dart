@@ -3,9 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_service.dart';
 
 final babyProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
-  final user = ref.watch(currentUserProvider);
-  
-  if (user == null) {
+  // Solo el id: al renovar el token (p. ej. al volver de la cámara) llega otro
+  // objeto User del mismo usuario, y recargar aquí desmontaba toda la app
+  // (AuthWrapper muestra la carga) y cerraba lo que hubiera abierto.
+  final userId = ref.watch(currentUserProvider.select((u) => u?.id));
+
+  if (userId == null) {
     return null;
   }
 

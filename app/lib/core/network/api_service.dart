@@ -88,6 +88,7 @@ class ApiService {
     String category,
     Map<String, dynamic> metadata, {
     DateTime? startTime,
+    DateTime? endTime,
   }) async {
     final response = await http.post(
       _uri('/babies/$babyId/events'),
@@ -95,6 +96,7 @@ class ApiService {
       body: jsonEncode({
         'category': category,
         'start_time': (startTime ?? DateTime.now()).toUtc().toIso8601String(),
+        if (endTime != null) 'end_time': endTime.toUtc().toIso8601String(),
         'metadata': metadata,
       }),
     );
